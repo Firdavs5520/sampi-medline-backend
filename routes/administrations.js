@@ -13,11 +13,18 @@ router.post("/", auth, async (req, res) => {
       return res.status(401).json({ message: "User aniqlanmadi" });
     }
 
+    const { patientName, type, name, quantity, price } = req.body;
+
+    if (!patientName || !type || !name || !price) {
+      return res.status(400).json({ message: "Majburiy maydon yetishmayapti" });
+    }
+
     const admin = await Administration.create({
-      patientName: req.body.patientName,
-      medicine: req.body.medicine,
-      quantity: req.body.quantity,
-      pricePerUnit: req.body.pricePerUnit,
+      patientName,
+      type,
+      name,
+      quantity: type === "medicine" ? quantity : 1,
+      price,
       nurseId: req.user.id,
     });
 
