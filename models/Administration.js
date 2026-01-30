@@ -1,22 +1,11 @@
 import mongoose from "mongoose";
 
-const AdministrationSchema = new mongoose.Schema(
-  {
+export default mongoose.model(
+  "Administration",
+  new mongoose.Schema({
     patientName: String,
-
-    type: {
-      type: String,
-      enum: ["medicine", "service"],
-      required: true,
-    },
-
-    itemName: String, // dori yoki xizmat nomi
-    quantity: Number,
-    pricePerUnit: Number,
-
-    nurse: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  },
-  { timestamps: true },
+    medicines: [{ name: String, qty: Number, price: Number }],
+    services: [{ name: String, price: Number }],
+    createdAt: { type: Date, default: Date.now },
+  }),
 );
-
-export default mongoose.model("Administration", AdministrationSchema);

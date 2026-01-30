@@ -12,10 +12,6 @@ router.post("/", auth, async (req, res) => {
   res.json(await Medicine.create(req.body));
 });
 
-router.put("/:id", auth, async (req, res) => {
-  res.json(await Medicine.findByIdAndUpdate(req.params.id, req.body));
-});
-
 router.delete("/:id", auth, async (req, res) => {
   await Medicine.findByIdAndDelete(req.params.id);
   res.json({ ok: true });
