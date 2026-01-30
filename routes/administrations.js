@@ -4,27 +4,28 @@ import auth from "../middleware/auth.js";
 
 const router = express.Router();
 
+/* ===================== */
+/* CREATE */
+/* ===================== */
 router.post("/", auth, async (req, res) => {
   try {
-    console.log("REQ.USER:", req.user);
-    console.log("REQ.BODY:", req.body);
+    const { patientName, type, itemName, quantity, pricePerUnit } = req.body;
 
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: "User aniqlanmadi" });
+    if (!patientName || !type || !itemName || !pricePerUnit) {
+      return res.status(400).json({ message: "Maʼlumot yetarli emas" });
     }
 
-    const admin = await Administration.create({
-      patientName: req.body.patientName,
-      medicine: req.body.medicine,
-      quantity: req.body.quantity,
-      pricePerUnit: req.body.pricePerUnit,
-      nurseId: req.user.id,
+    const record = await Administration.create({
+      patientName,
+      type,
+      itemName,
+      quantity: quantity || 1,
+      pricePerUnit,
     });
 
-    res.json(admin);
+    res.status(201).json(record);
   } catch (e) {
-    console.error("ADMIN CREATE ERROR:", e);
-    res.status(500).json({ message: e.message });
+    res.status(500).json({ message: "Saqlashda xato" });
   }
 });
 
