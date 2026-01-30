@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
 
-export default mongoose.model(
-  "Administration",
-  new mongoose.Schema({
-    patientName: String,
-    medicines: [{ name: String, qty: Number, price: Number }],
-    services: [{ name: String, price: Number }],
-    createdAt: { type: Date, default: Date.now },
-  }),
-);
+const AdministrationSchema = new mongoose.Schema({
+  patientName: { type: String, required: true },
+  medicine: { type: String, required: true },
+  quantity: { type: Number, required: true },
+  pricePerUnit: { type: Number, required: true },
+  nurseId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  date: { type: Date, default: Date.now },
+});
+
+export default mongoose.model("Administration", AdministrationSchema);

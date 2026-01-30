@@ -4,12 +4,20 @@ import auth from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/", auth, async (_, res) => {
-  res.json(await Service.find());
+/* CREATE SERVICE (nurse) */
+router.post("/", auth, async (req, res) => {
+  try {
+    const service = await Service.create(req.body);
+    res.json(service);
+  } catch (e) {
+    res.status(500).json({ message: "Xizmat qo‘shishda xato" });
+  }
 });
 
-router.post("/", auth, async (req, res) => {
-  res.json(await Service.create(req.body));
+/* GET ALL SERVICES */
+router.get("/", auth, async (req, res) => {
+  const services = await Service.find();
+  res.json(services);
 });
 
 export default router;

@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 
-export default mongoose.model(
-  "Medicine",
-  new mongoose.Schema({
-    name: String,
-    price: Number,
-  }),
-);
+const MedicineSchema = new mongoose.Schema({
+  name: String,
+  type: String,
+  price: Number,
+});
+
+export default mongoose.model("Medicine", MedicineSchema);

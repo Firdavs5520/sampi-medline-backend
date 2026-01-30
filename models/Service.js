@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
 
-export default mongoose.model(
-  "Service",
-  new mongoose.Schema({
-    name: String,
-    price: Number,
-  }),
+const serviceSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    price: { type: Number, default: 0 },
+  },
+  { timestamps: true },
 );
+
+export default mongoose.model("Service", serviceSchema);
