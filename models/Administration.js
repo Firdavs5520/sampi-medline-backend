@@ -1,11 +1,8 @@
 import mongoose from "mongoose";
 
-const administrationSchema = new mongoose.Schema(
+const AdministrationSchema = new mongoose.Schema(
   {
-    patientName: {
-      type: String,
-      required: true,
-    },
+    patientName: String,
 
     type: {
       type: String,
@@ -13,22 +10,13 @@ const administrationSchema = new mongoose.Schema(
       required: true,
     },
 
-    itemName: {
-      type: String,
-      required: true,
-    },
+    itemName: String, // dori yoki xizmat nomi
+    quantity: Number,
+    pricePerUnit: Number,
 
-    quantity: {
-      type: Number,
-      default: 1,
-    },
-
-    pricePerUnit: {
-      type: Number,
-      required: true,
-    },
+    nurse: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );
 
-export default mongoose.model("Administration", administrationSchema);
+export default mongoose.model("Administration", AdministrationSchema);

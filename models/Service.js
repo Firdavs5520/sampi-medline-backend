@@ -1,23 +1,11 @@
 import mongoose from "mongoose";
 
-const serviceSchema = new mongoose.Schema(
+const ServiceSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    price: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    active: {
-      type: Boolean,
-      default: true,
-    },
+    name: String,
+    price: Number,
   },
   { timestamps: true },
 );
 
-export default mongoose.model("Service", serviceSchema);
+export default mongoose.model("Service", ServiceSchema);
