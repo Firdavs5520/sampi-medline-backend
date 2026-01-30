@@ -6,10 +6,23 @@ const serviceSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    price: {
-      type: Number,
-      required: true,
-    },
+
+    variants: [
+      {
+        label: {
+          type: String, // "1 marta", "2 marta"
+          required: true,
+        },
+        count: {
+          type: Number, // 1, 2
+          required: true,
+        },
+        price: {
+          type: Number, // 30000, 50000
+          required: true,
+        },
+      },
+    ],
   },
   { timestamps: true },
 );
