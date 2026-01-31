@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+
 const serviceSchema = new mongoose.Schema(
   {
     name: {
@@ -12,8 +14,12 @@ const serviceSchema = new mongoose.Schema(
           price: Number,
         },
       ],
-      default: [], // 🔥 MUHIM
+      default: [],
     },
   },
   { timestamps: true },
 );
+
+const Service = mongoose.model("Service", serviceSchema);
+
+export default Service;
