@@ -2,6 +2,7 @@ import express from "express";
 import Medicine from "../models/Medicine.js";
 import DeliveryLog from "../models/DeliveryLog.js";
 import { auth, allowRoles } from "../middleware/auth.js";
+import { sendTelegram } from "../utils/telegram.js";
 
 const router = express.Router();
 
@@ -30,6 +31,16 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
     medicine.lastDeliveredBy = req.user.id;
     medicine.lastDeliveredAt = new Date();
     await medicine.save();
+
+    await sendTelegram(`
+🚚 <b>OMBORGA DORI KELDI</b>
+
+💊 <b>${medicine.name}</b>
+➕ Qo‘shildi: <b>${quantity}</b> dona
+📦 Hozir omborda: <b>${medicine.quantity}</b> dona
+
+🕒 ${new Date().toLocaleString()}
+`);
 
     // 🧾 DELIVERY LOG (ENG MUHIM QATOR)
     await DeliveryLog.create({
