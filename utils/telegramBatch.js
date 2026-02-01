@@ -18,5 +18,5 @@ export function addToTelegramBatch(text) {
     // tozalash
     buffer = [];
     timer = null;
-  }, 5000); // ⏳ 5 soniya
+  }, 40000); // ⏳ 5 soniya
 }
