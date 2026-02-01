@@ -1,15 +1,17 @@
-import axios from "axios";
-
 export async function sendTelegram(message) {
   try {
     const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-    await axios.post(url, {
-      chat_id: process.env.TELEGRAM_CHAT_ID,
-      text: message,
-      parse_mode: "HTML",
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: process.env.TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: "HTML",
+      }),
     });
-  } catch (e) {
-    console.error("TELEGRAM ERROR:", e.message);
+  } catch (err) {
+    console.error("TELEGRAM ERROR:", err.message);
   }
 }
