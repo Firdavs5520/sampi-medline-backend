@@ -2,29 +2,36 @@ import express from "express";
 import Medicine from "../models/Medicine.js";
 import DeliveryLog from "../models/DeliveryLog.js";
 import { auth, allowRoles } from "../middleware/auth.js";
-import { sendTelegram } from "../utils/telegram.js";
+import { addToTelegramBatch } from "../utils/telegramBatch.js";
 
 const router = express.Router();
 
 /* ================================================= */
-/* 🚚 DELIVERY — BIR NECHTA DORI (BATCH) */
+/* 🚚 DELIVERY — HAR BIR QO‘SHILGAN DORI BATCH GA QO‘SHILADI */
 /* ================================================= */
 router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
   try {
-    const { items } = req.body;
+    let items = [];
 
-    if (!Array.isArray(items) || items.length === 0) {
+    // 🔁 Frontend qanday yuborganini aniqlaymiz
+    if (Array.isArray(req.body.items)) {
+      items = req.body.items;
+    } else if (req.body.medicineId && req.body.quantity) {
+      items = [
+        {
+          medicineId: req.body.medicineId,
+          quantity: req.body.quantity,
+        },
+      ];
+    } else {
       return res.status(400).json({
-        message: "Dorilar ro‘yxati noto‘g‘ri",
+        message: "Delivery maʼlumotlari noto‘g‘ri",
       });
     }
 
-    let telegramMessage = `🚚 <b>OMBORGA DORI KELDI</b>\n\n`;
-
     for (const item of items) {
       const { medicineId, quantity } = item;
-
-      if (!medicineId || !quantity || quantity <= 0) continue;
+      if (!medicineId || quantity <= 0) continue;
 
       const medicine = await Medicine.findById(medicineId);
       if (!medicine) continue;
@@ -42,17 +49,13 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
         deliveredBy: req.user.id,
       });
 
-      // 🧩 TELEGRAMGA QO‘SHIB BORISH
-      telegramMessage +=
+      // 📩 TELEGRAM BATCH GA QO‘SHAMIZ
+      addToTelegramBatch(
         `💊 <b>${medicine.name}</b>\n` +
-        `➕ Qo‘shildi: <b>${quantity}</b> dona\n` +
-        `📦 Hozir omborda: <b>${medicine.quantity}</b> dona\n\n`;
+          `➕ Qo‘shildi: <b>${quantity}</b> dona\n` +
+          `📦 Hozir omborda: <b>${medicine.quantity}</b> dona\n`,
+      );
     }
-
-    telegramMessage += `🕒 ${new Date().toLocaleString()}`;
-
-    // 📩 TELEGRAMGA FAQAT 1 MARTA
-    await sendTelegram(telegramMessage);
 
     res.json({
       message: "Dorilar muvaffaqiyatli omborga qo‘shildi",
@@ -66,14 +69,13 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 🚚 DELIVERY — DORI RO‘YXATI (TANLASH UCHUN) */
+/* 🚚 DELIVERY — DORI RO‘YXATI */
 /* ================================================= */
 router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
   try {
     const medicines = await Medicine.find().sort({ name: 1 });
     res.json(medicines);
   } catch (e) {
-    console.error("FOR DELIVERY ERROR:", e);
     res.status(500).json({
       message: "Dorilarni olishda xatolik",
     });
@@ -88,22 +90,16 @@ router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
     const { quantity } = req.body;
 
     if (!quantity || quantity <= 0) {
-      return res.status(400).json({
-        message: "Miqdor noto‘g‘ri",
-      });
+      return res.status(400).json({ message: "Miqdor noto‘g‘ri" });
     }
 
     const medicine = await Medicine.findById(req.params.id);
     if (!medicine) {
-      return res.status(404).json({
-        message: "Dori topilmadi",
-      });
+      return res.status(404).json({ message: "Dori topilmadi" });
     }
 
     if (medicine.quantity < quantity) {
-      return res.status(400).json({
-        message: "Dori yetarli emas",
-      });
+      return res.status(400).json({ message: "Dori yetarli emas" });
     }
 
     medicine.quantity -= Number(quantity);
@@ -114,7 +110,6 @@ router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
       medicine,
     });
   } catch (e) {
-    console.error("USE ERROR:", e);
     res.status(500).json({
       message: "Dori ishlatishda xatolik",
     });
@@ -122,34 +117,22 @@ router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILARNI KO‘RISH */
+/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR */
 /* ================================================= */
 router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
-  try {
-    const meds = await Medicine.find().sort({ updatedAt: -1 });
-    res.json(meds);
-  } catch (e) {
-    res.status(500).json({
-      message: "Dorilarni olishda xatolik",
-    });
-  }
+  const meds = await Medicine.find().sort({ updatedAt: -1 });
+  res.json(meds);
 });
 
 /* ================================================= */
 /* 👨‍💼 MANAGER — KAM QOLGAN DORILAR */
 /* ================================================= */
 router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
-  try {
-    const alerts = await Medicine.find({
-      $expr: { $lte: ["$quantity", "$minLevel"] },
-    }).sort({ quantity: 1 });
+  const alerts = await Medicine.find({
+    $expr: { $lte: ["$quantity", "$minLevel"] },
+  }).sort({ quantity: 1 });
 
-    res.json(alerts);
-  } catch (e) {
-    res.status(500).json({
-      message: "Ogohlantirishlarni olishda xatolik",
-    });
-  }
+  res.json(alerts);
 });
 
 export default router;
