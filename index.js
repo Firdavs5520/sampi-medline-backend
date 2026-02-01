@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
 
+// ROUTES
 import authRoutes from "./routes/auth.js";
 import medicineRoutes from "./routes/medicines.js";
 import serviceRoutes from "./routes/services.js";
@@ -16,21 +17,30 @@ const app = express();
 /* ===================== */
 /* MIDDLEWARE */
 /* ===================== */
+
+// 🔥 CORS — RENDER + LOCAL + FUTURE DEPLOY UCHUN
 app.use(
   cors({
-    origin: "*", // production’da frontend domain yoz
-    methods: ["GET", "POST"],
-    credentials: true,
+    origin: [
+      "http://localhost:5173", // local frontend
+      "https://sampi-medline.vercel.app", // agar frontend deploy qilinsa
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-app.use(express.json({ limit: "10mb" }));
+// 🔥 PRE-FLIGHT (OPTIONS) — PENDING MUAMMOSINI HAL QILADI
+app.options("*", cors());
+
+// JSON BODY
+app.use(express.json());
 
 /* ===================== */
 /* HEALTH CHECK */
 /* ===================== */
 app.get("/", (_req, res) => {
-  res.status(200).send("Sampi Medline API is running 🚀");
+  res.send("Sampi Medline API is running 🚀");
 });
 
 /* ===================== */
@@ -43,28 +53,17 @@ app.use("/api/administrations", administrationRoutes);
 app.use("/api/reports", reportRoutes);
 
 /* ===================== */
-/* 404 HANDLER */
-/* ===================== */
-app.use((_req, res) => {
-  res.status(404).json({
-    message: "Route topilmadi",
-  });
-});
-
-/* ===================== */
-/* GLOBAL ERROR HANDLER */
+/* ERROR HANDLER (OPTIONAL, LEKIN FOYDALI) */
 /* ===================== */
 app.use((err, _req, res, _next) => {
-  console.error("🔥 SERVER ERROR:", err);
-  res.status(500).json({
-    message: "Ichki server xatoligi",
-  });
+  console.error("SERVER ERROR:", err);
+  res.status(500).json({ message: "Server xatoligi" });
 });
 
 /* ===================== */
 /* DB + SERVER */
 /* ===================== */
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 mongoose
   .connect(process.env.MONGO_URI)
@@ -74,5 +73,4 @@ mongoose
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
-    process.exit(1);
   });
