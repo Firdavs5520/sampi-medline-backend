@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const AdministrationSchema = new mongoose.Schema(
+const administrationSchema = new mongoose.Schema(
   {
     patientName: {
       type: String,
@@ -14,33 +14,51 @@ const AdministrationSchema = new mongoose.Schema(
       required: true,
     },
 
+    // 🔗 Medicine ishlatilganda
+    medicine: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Medicine",
+    },
+
+    // 🔗 Service ishlatilganda
+    service: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Service",
+    },
+
     name: {
       type: String,
-      required: true,
+      required: true, // reportlar uchun (denormalized)
     },
 
     quantity: {
       type: Number,
-      default: 1, // xizmatda ishlatilmaydi
+      default: 1, // faqat medicine uchun
+      min: 1,
     },
 
     price: {
       type: Number,
       required: true,
+      min: 0,
     },
 
-    nurseId: {
+    nurse: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
-    date: {
-      type: Date,
-      default: Date.now,
-    },
   },
-  { timestamps: true },
+  {
+    timestamps: true, // createdAt / updatedAt
+  },
 );
 
-export default mongoose.model("Administration", AdministrationSchema);
+/* ===================== */
+/* INDEXLAR (REPORT UCHUN) */
+/* ===================== */
+administrationSchema.index({ createdAt: 1 });
+administrationSchema.index({ type: 1 });
+administrationSchema.index({ nurse: 1 });
+
+export default mongoose.model("Administration", administrationSchema);

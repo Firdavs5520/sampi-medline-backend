@@ -1,23 +1,46 @@
 import jwt from "jsonwebtoken";
 
-export default function auth(req, res, next) {
+/**
+ * 1️⃣ TOKEN TEKSHIRADI
+ * 2️⃣ req.user GA id VA role NI QO‘YADI
+ */
+export const authMiddleware = (req, res, next) => {
   try {
-    const header = req.headers.authorization;
-    if (!header) {
-      return res.status(401).json({ message: "Token yo‘q" });
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Token mavjud emas",
+      });
     }
 
-    const token = header.split(" ")[1];
+    const token = authHeader.split(" ")[1];
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 🔥 MUHIM QATOR
     req.user = {
       id: decoded.id,
       role: decoded.role,
     };
 
     next();
-  } catch (e) {
-    return res.status(401).json({ message: "Token noto‘g‘ri" });
+  } catch (error) {
+    return res.status(401).json({
+      message: "Token yaroqsiz yoki eskirgan",
+    });
   }
-}
+};
+
+/**
+ * 3️⃣ ROLE TEKSHIRADI (delivery / manager / nurse)
+ */
+export const allowRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: "Bu amal uchun ruxsat yo‘q",
+      });
+    }
+    next();
+  };
+};
