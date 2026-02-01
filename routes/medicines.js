@@ -116,4 +116,24 @@ router.get(
   },
 );
 
+/* ===================== */
+/* 🚚 DELIVERY — DORI RO‘YXATI */
+/* ===================== */
+router.get(
+  "/for-delivery",
+  authMiddleware,
+  allowRoles("delivery"),
+  async (_req, res) => {
+    try {
+      const medicines = await Medicine.find().sort({ name: 1 });
+      res.json(medicines);
+    } catch (e) {
+      console.error("FOR DELIVERY ERROR:", e);
+      res.status(500).json({
+        message: "Dorilarni olishda xatolik",
+      });
+    }
+  },
+);
+
 export default router;
