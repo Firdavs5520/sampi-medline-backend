@@ -1,20 +1,19 @@
 import jwt from "jsonwebtoken";
 
-/**
- * 1️⃣ TOKEN TEKSHIRADI
- * 2️⃣ req.user GA id VA role NI QO‘YADI
- */
-export const authMiddleware = (req, res, next) => {
+/* ===================== */
+/* AUTH — TOKEN CHECK */
+/* ===================== */
+export function auth(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
+    const header = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (!header || !header.startsWith("Bearer ")) {
       return res.status(401).json({
         message: "Token mavjud emas",
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = header.split(" ")[1];
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
@@ -24,23 +23,31 @@ export const authMiddleware = (req, res, next) => {
     };
 
     next();
-  } catch (error) {
+  } catch (err) {
     return res.status(401).json({
       message: "Token yaroqsiz yoki eskirgan",
     });
   }
-};
+}
 
-/**
- * 3️⃣ ROLE TEKSHIRADI (delivery / manager / nurse)
- */
-export const allowRoles = (...roles) => {
+/* ===================== */
+/* ROLE GUARD */
+/* ===================== */
+export function allowRoles(...roles) {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    // auth ishlamagan bo‘lsa
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Avtorizatsiya talab qilinadi",
+      });
+    }
+
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({
         message: "Bu amal uchun ruxsat yo‘q",
       });
     }
+
     next();
   };
-};
+}
