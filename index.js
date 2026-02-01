@@ -15,25 +15,19 @@ dotenv.config();
 const app = express();
 
 /* ===================== */
-/* MIDDLEWARE */
+/* CORS — NODE 22 SAFE */
 /* ===================== */
-
-// 🔥 CORS — RENDER + LOCAL + FUTURE DEPLOY UCHUN
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173", // local frontend
-      "https://sampi-medline.vercel.app", // agar frontend deploy qilinsa
-    ],
+    origin: ["http://localhost:5173", "https://sampi-medline.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
-// 🔥 PRE-FLIGHT (OPTIONS) — PENDING MUAMMOSINI HAL QILADI
-app.options("*", cors());
-
-// JSON BODY
+/* ===================== */
+/* BODY PARSER */
+/* ===================== */
 app.use(express.json());
 
 /* ===================== */
@@ -53,7 +47,7 @@ app.use("/api/administrations", administrationRoutes);
 app.use("/api/reports", reportRoutes);
 
 /* ===================== */
-/* ERROR HANDLER (OPTIONAL, LEKIN FOYDALI) */
+/* ERROR HANDLER */
 /* ===================== */
 app.use((err, _req, res, _next) => {
   console.error("SERVER ERROR:", err);
@@ -69,7 +63,9 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB connected");
-    app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`🚀 Backend running on port ${PORT}`);
+    });
   })
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err.message);
