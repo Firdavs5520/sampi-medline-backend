@@ -7,50 +7,55 @@ import { sendTelegram } from "../utils/telegram.js";
 const router = express.Router();
 
 /* ================================================= */
-/* 🚚 DELIVERY — FAQAT BOR DORIGA MIQDOR QO‘SHADI */
+/* 🚚 DELIVERY — BIR NECHTA DORI (BATCH) */
 /* ================================================= */
 router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
   try {
-    const { medicineId, quantity } = req.body;
+    const { items } = req.body;
 
-    if (!medicineId || !quantity || quantity <= 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
-        message: "Dori va miqdor majburiy",
+        message: "Dorilar ro‘yxati noto‘g‘ri",
       });
     }
 
-    const medicine = await Medicine.findById(medicineId);
-    if (!medicine) {
-      return res.status(404).json({
-        message: "Dori topilmadi",
+    let telegramMessage = `🚚 <b>OMBORGA DORI KELDI</b>\n\n`;
+
+    for (const item of items) {
+      const { medicineId, quantity } = item;
+
+      if (!medicineId || !quantity || quantity <= 0) continue;
+
+      const medicine = await Medicine.findById(medicineId);
+      if (!medicine) continue;
+
+      // ➕ OMBORGA QO‘SHISH
+      medicine.quantity += Number(quantity);
+      medicine.lastDeliveredBy = req.user.id;
+      medicine.lastDeliveredAt = new Date();
+      await medicine.save();
+
+      // 🧾 DELIVERY LOG
+      await DeliveryLog.create({
+        medicine: medicine._id,
+        quantity: Number(quantity),
+        deliveredBy: req.user.id,
       });
+
+      // 🧩 TELEGRAMGA QO‘SHIB BORISH
+      telegramMessage +=
+        `💊 <b>${medicine.name}</b>\n` +
+        `➕ Qo‘shildi: <b>${quantity}</b> dona\n` +
+        `📦 Hozir omborda: <b>${medicine.quantity}</b> dona\n\n`;
     }
 
-    // ➕ OMBORGA QO‘SHISH
-    medicine.quantity += Number(quantity);
-    medicine.lastDeliveredBy = req.user.id;
-    medicine.lastDeliveredAt = new Date();
-    await medicine.save();
+    telegramMessage += `🕒 ${new Date().toLocaleString()}`;
 
-    await sendTelegram(`
-🚚 <b>OMBORGA DORI KELDI</b>
-
-💊 <b>${medicine.name}</b>
-➕ Qo‘shildi: <b>${quantity}</b> dona
-📦 Hozir omborda: <b>${medicine.quantity}</b> dona
-
-🕒 ${new Date().toLocaleString()}
-`);
-
-    // 🧾 DELIVERY LOG (ENG MUHIM QATOR)
-    await DeliveryLog.create({
-      medicine: medicine._id,
-      quantity: Number(quantity),
-      deliveredBy: req.user.id,
-    });
+    // 📩 TELEGRAMGA FAQAT 1 MARTA
+    await sendTelegram(telegramMessage);
 
     res.json({
-      message: "Dori omborga qo‘shildi",
+      message: "Dorilar muvaffaqiyatli omborga qo‘shildi",
     });
   } catch (e) {
     console.error("DELIVERY ERROR:", e);
@@ -117,22 +122,34 @@ router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — KO‘RISH */
+/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILARNI KO‘RISH */
 /* ================================================= */
 router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
-  const meds = await Medicine.find().sort({ updatedAt: -1 });
-  res.json(meds);
+  try {
+    const meds = await Medicine.find().sort({ updatedAt: -1 });
+    res.json(meds);
+  } catch (e) {
+    res.status(500).json({
+      message: "Dorilarni olishda xatolik",
+    });
+  }
 });
 
 /* ================================================= */
 /* 👨‍💼 MANAGER — KAM QOLGAN DORILAR */
 /* ================================================= */
 router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
-  const alerts = await Medicine.find({
-    $expr: { $lte: ["$quantity", "$minLevel"] },
-  }).sort({ quantity: 1 });
+  try {
+    const alerts = await Medicine.find({
+      $expr: { $lte: ["$quantity", "$minLevel"] },
+    }).sort({ quantity: 1 });
 
-  res.json(alerts);
+    res.json(alerts);
+  } catch (e) {
+    res.status(500).json({
+      message: "Ogohlantirishlarni olishda xatolik",
+    });
+  }
 });
 
 export default router;
