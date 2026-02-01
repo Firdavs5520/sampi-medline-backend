@@ -1,9 +1,9 @@
 import jwt from "jsonwebtoken";
 
-/* ===================== */
-/* AUTH — TOKEN CHECK */
-/* ===================== */
-export function auth(req, res, next) {
+/* ================================================= */
+/* AUTH MIDDLEWARE (TOKEN CHECK) */
+/* ================================================= */
+export function authMiddleware(req, res, next) {
   try {
     const header = req.headers.authorization;
 
@@ -14,7 +14,6 @@ export function auth(req, res, next) {
     }
 
     const token = header.split(" ")[1];
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = {
@@ -30,12 +29,14 @@ export function auth(req, res, next) {
   }
 }
 
-/* ===================== */
+/* 🔁 QISQA NOM (new style) */
+export const auth = authMiddleware;
+
+/* ================================================= */
 /* ROLE GUARD */
-/* ===================== */
+/* ================================================= */
 export function allowRoles(...roles) {
   return (req, res, next) => {
-    // auth ishlamagan bo‘lsa
     if (!req.user) {
       return res.status(401).json({
         message: "Avtorizatsiya talab qilinadi",
