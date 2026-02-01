@@ -5,15 +5,22 @@ import { authMiddleware, allowRoles } from "../middleware/auth.js";
 const router = express.Router();
 
 /* ===================== */
-/* 👩‍⚕️ NURSE — SAQLASH */
+/* 👩‍⚕️ NURSE — QO‘SHISH */
 /* ===================== */
 router.post("/", authMiddleware, allowRoles("nurse"), async (req, res) => {
   try {
     const { patientName, type, name, quantity, price } = req.body;
 
+    // 🔒 VALIDATION
     if (!patientName || !type || !name || !price) {
       return res.status(400).json({
         message: "Majburiy maydonlar yetishmayapti",
+      });
+    }
+
+    if (!["medicine", "service"].includes(type)) {
+      return res.status(400).json({
+        message: "Type noto‘g‘ri",
       });
     }
 
@@ -23,7 +30,7 @@ router.post("/", authMiddleware, allowRoles("nurse"), async (req, res) => {
       name,
       quantity: type === "medicine" ? quantity || 1 : 1,
       price,
-      nurseId: req.user.id,
+      nurseId: req.user.id, // 🔥 ENG MUHIM QATOR
       date: new Date(),
     });
 
