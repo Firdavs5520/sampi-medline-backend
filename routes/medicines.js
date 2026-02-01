@@ -1,70 +1,119 @@
 import express from "express";
 import Medicine from "../models/Medicine.js";
-import { auth, allowRoles } from "../middleware/auth.js";
+import { authMiddleware, allowRoles } from "../middleware/auth.js";
 
 const router = express.Router();
 
-/* 🚚 DELIVERY — OMBORGA QO‘SHISH */
-router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
-  const { name, category, unit, price, quantity, minLevel = 5 } = req.body;
+/* ===================== */
+/* 🚚 DELIVERY — FAQAT BOR DORIGA QO‘SHISH */
+/* ===================== */
+router.post(
+  "/delivery",
+  authMiddleware,
+  allowRoles("delivery"),
+  async (req, res) => {
+    try {
+      const { medicineId, quantity } = req.body;
 
-  let medicine = await Medicine.findOne({ name });
+      if (!medicineId || !quantity || quantity <= 0) {
+        return res.status(400).json({
+          message: "Dori va miqdor majburiy",
+        });
+      }
 
-  if (medicine) {
-    medicine.quantity += Number(quantity);
-    medicine.price = Number(price);
-    medicine.minLevel = minLevel;
-    medicine.lastDeliveredBy = req.user.id;
-    medicine.lastDeliveredAt = new Date();
-    await medicine.save();
-  } else {
-    medicine = await Medicine.create({
-      name,
-      category,
-      unit,
-      price: Number(price),
-      quantity: Number(quantity),
-      minLevel,
-      lastDeliveredBy: req.user.id,
-      lastDeliveredAt: new Date(),
-    });
-  }
+      const medicine = await Medicine.findById(medicineId);
 
-  res.json({ message: "Dori qo‘shildi", medicine });
-});
+      if (!medicine) {
+        return res.status(404).json({
+          message: "Bunday dori omborda mavjud emas",
+        });
+      }
 
+      // ➕ FAQAT MIQDOR QO‘SHAMIZ
+      medicine.quantity += Number(quantity);
+      medicine.lastDeliveredBy = req.user.id;
+      medicine.lastDeliveredAt = new Date();
+
+      await medicine.save();
+
+      res.json({
+        message: "Dori omborga qo‘shildi",
+        medicine,
+      });
+    } catch (error) {
+      console.error("DELIVERY ERROR:", error);
+      res.status(500).json({
+        message: "Delivery qo‘shishda xatolik",
+      });
+    }
+  },
+);
+
+/* ===================== */
 /* 👩‍⚕️ NURSE — DORI ISHLATISH */
-router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
-  const { quantity } = req.body;
+/* ===================== */
+router.post(
+  "/use/:id",
+  authMiddleware,
+  allowRoles("nurse"),
+  async (req, res) => {
+    try {
+      const { quantity } = req.body;
 
-  const medicine = await Medicine.findById(req.params.id);
-  if (!medicine) {
-    return res.status(404).json({ message: "Dori topilmadi" });
-  }
+      if (!quantity || quantity <= 0) {
+        return res.status(400).json({
+          message: "Miqdor noto‘g‘ri",
+        });
+      }
 
-  if (medicine.quantity < quantity) {
-    return res.status(400).json({ message: "Dori yetarli emas" });
-  }
+      const medicine = await Medicine.findById(req.params.id);
 
-  medicine.quantity -= Number(quantity);
-  await medicine.save();
+      if (!medicine) {
+        return res.status(404).json({ message: "Dori topilmadi" });
+      }
 
-  res.json({ message: "Dori ishlatildi", medicine });
-});
+      if (medicine.quantity < quantity) {
+        return res.status(400).json({ message: "Dori yetarli emas" });
+      }
 
+      medicine.quantity -= Number(quantity);
+      await medicine.save();
+
+      res.json({ message: "Dori ishlatildi", medicine });
+    } catch (e) {
+      console.error("USE ERROR:", e);
+      res.status(500).json({ message: "Dori ishlatishda xatolik" });
+    }
+  },
+);
+
+/* ===================== */
 /* 👩‍⚕️ + 👨‍💼 — KO‘RISH */
-router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
-  const meds = await Medicine.find().sort({ updatedAt: -1 });
-  res.json(meds);
-});
+/* ===================== */
+router.get(
+  "/",
+  authMiddleware,
+  allowRoles("nurse", "manager"),
+  async (_req, res) => {
+    const meds = await Medicine.find().sort({ updatedAt: -1 });
+    res.json(meds);
+  },
+);
 
+/* ===================== */
 /* 👨‍💼 MANAGER — ALERT */
-router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
-  const alerts = await Medicine.find({
-    $expr: { $lte: ["$quantity", "$minLevel"] },
-  });
+/* ===================== */
+router.get(
+  "/alerts",
+  authMiddleware,
+  allowRoles("manager"),
+  async (_req, res) => {
+    const alerts = await Medicine.find({
+      $expr: { $lte: ["$quantity", "$minLevel"] },
+    });
 
-  res.json(alerts);
-});
+    res.json(alerts);
+  },
+);
 
 export default router;
