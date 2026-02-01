@@ -4,14 +4,38 @@ import { auth, allowRoles } from "../middleware/auth.js";
 
 const router = express.Router();
 
-/* 👩‍⚕️ NURSE */
+/* ===================== */
+/* 👩‍⚕️ NURSE — SAQLASH */
+/* ===================== */
 router.post("/", auth, allowRoles("nurse"), async (req, res) => {
-  const admin = await Administration.create({
-    ...req.body,
-    nurseId: req.user.id,
-  });
+  try {
+    const { patientName, type, name, quantity, price } = req.body;
 
-  res.json(admin);
+    // 🔒 VALIDATION
+    if (!patientName || !type || !name || !price) {
+      return res.status(400).json({
+        message: "Majburiy maydonlar yetishmayapti",
+      });
+    }
+
+    const admin = await Administration.create({
+      patientName,
+      type,
+      name,
+      quantity: type === "medicine" ? quantity || 1 : 1,
+      price,
+      nurseId: req.user.id, // 🔥 ENG MUHIM QATOR
+      date: new Date(),
+    });
+
+    res.status(201).json(admin);
+  } catch (error) {
+    console.error("ADMINISTRATION CREATE ERROR:", error);
+
+    res.status(500).json({
+      message: "Administration saqlashda xatolik",
+    });
+  }
 });
 
 export default router;
