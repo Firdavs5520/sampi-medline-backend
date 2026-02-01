@@ -1,11 +1,12 @@
 import express from "express";
 import Medicine from "../models/Medicine.js";
+import DeliveryLog from "../models/DeliveryLog.js";
 import { auth, allowRoles } from "../middleware/auth.js";
 
 const router = express.Router();
 
 /* ================================================= */
-/* 🚚 DELIVERY — FAQAT BOR DORIGA QO‘SHISH */
+/* 🚚 DELIVERY — FAQAT BOR DORIGA MIQDOR QO‘SHADI */
 /* ================================================= */
 router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
   try {
@@ -24,15 +25,21 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
       });
     }
 
+    // ➕ OMBORGA QO‘SHISH
     medicine.quantity += Number(quantity);
     medicine.lastDeliveredBy = req.user.id;
     medicine.lastDeliveredAt = new Date();
-
     await medicine.save();
+
+    // 🧾 DELIVERY LOG (ENG MUHIM QATOR)
+    await DeliveryLog.create({
+      medicine: medicine._id,
+      quantity: Number(quantity),
+      deliveredBy: req.user.id,
+    });
 
     res.json({
       message: "Dori omborga qo‘shildi",
-      medicine,
     });
   } catch (e) {
     console.error("DELIVERY ERROR:", e);
@@ -43,7 +50,7 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 🚚 DELIVERY — DORI RO‘YXATI */
+/* 🚚 DELIVERY — DORI RO‘YXATI (TANLASH UCHUN) */
 /* ================================================= */
 router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
   try {
@@ -112,7 +119,7 @@ router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
 router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
   const alerts = await Medicine.find({
     $expr: { $lte: ["$quantity", "$minLevel"] },
-  });
+  }).sort({ quantity: 1 });
 
   res.json(alerts);
 });

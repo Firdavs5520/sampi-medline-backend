@@ -9,6 +9,7 @@ import medicineRoutes from "./routes/medicines.js";
 import serviceRoutes from "./routes/services.js";
 import administrationRoutes from "./routes/administrations.js";
 import reportRoutes from "./routes/reports.js";
+import deliveryLogRoutes from "./routes/deliveryLogs.js";
 
 dotenv.config();
 
@@ -45,7 +46,7 @@ app.use("/api/medicines", medicineRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/administrations", administrationRoutes);
 app.use("/api/reports", reportRoutes);
-
+app.use("/api/delivery-logs", deliveryLogRoutes);
 /* ===================== */
 /* ERROR HANDLER */
 /* ===================== */
