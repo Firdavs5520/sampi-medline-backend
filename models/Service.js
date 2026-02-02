@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 
+/* ===================== */
+/* SERVICE VARIANT */
+/* ===================== */
 const serviceVariantSchema = new mongoose.Schema(
   {
     label: {
@@ -17,6 +20,9 @@ const serviceVariantSchema = new mongoose.Schema(
   { _id: false },
 );
 
+/* ===================== */
+/* SERVICE */
+/* ===================== */
 const serviceSchema = new mongoose.Schema(
   {
     name: {
@@ -24,6 +30,7 @@ const serviceSchema = new mongoose.Schema(
       required: true,
       trim: true,
       unique: true,
+      index: true, // ⚡ tez qidiruv
     },
 
     variants: {
@@ -40,9 +47,22 @@ const serviceSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+      index: true, // ⚡ aktiv xizmatlar tez
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+    versionKey: false,
+  },
 );
+
+/* ===================== */
+/* 🔥 INDEXLAR */
+/* ===================== */
+// aktiv xizmatlarni tez olish
+serviceSchema.index({ isActive: 1, createdAt: -1 });
+
+// nom bo‘yicha tez sort / qidiruv
+serviceSchema.index({ name: 1 });
 
 export default mongoose.model("Service", serviceSchema);

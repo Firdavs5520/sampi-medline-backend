@@ -7,64 +7,77 @@ import { addToTelegramBatch } from "../utils/telegramBatch.js";
 const router = express.Router();
 
 /* ================================================= */
-/* 🚚 DELIVERY — HAR BIR QO‘SHILGAN DORI BATCH GA QO‘SHILADI */
+/* 🚚 DELIVERY — BULK (Juda tez) */
 /* ================================================= */
 router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
   try {
     let items = [];
 
-    // 🔁 Frontend qanday yuborganini aniqlaymiz
     if (Array.isArray(req.body.items)) {
       items = req.body.items;
     } else if (req.body.medicineId && req.body.quantity) {
       items = [
-        {
-          medicineId: req.body.medicineId,
-          quantity: req.body.quantity,
-        },
+        { medicineId: req.body.medicineId, quantity: req.body.quantity },
       ];
     } else {
-      return res.status(400).json({
-        message: "Delivery maʼlumotlari noto‘g‘ri",
-      });
+      return res
+        .status(400)
+        .json({ message: "Delivery maʼlumotlari noto‘g‘ri" });
     }
 
-    for (const item of items) {
-      const { medicineId, quantity } = item;
-      if (!medicineId || quantity <= 0) continue;
+    const ops = [];
+    const logs = [];
+    const telegramMsgs = [];
 
-      const medicine = await Medicine.findById(medicineId);
-      if (!medicine) continue;
+    for (const { medicineId, quantity } of items) {
+      const qty = Number(quantity);
+      if (!medicineId || qty <= 0) continue;
 
-      // ➕ OMBORGA QO‘SHISH
-      medicine.quantity += Number(quantity);
-      medicine.lastDeliveredBy = req.user.id;
-      medicine.lastDeliveredAt = new Date();
-      await medicine.save();
+      ops.push({
+        updateOne: {
+          filter: { _id: medicineId },
+          update: {
+            $inc: { quantity: qty },
+            $set: {
+              lastDeliveredBy: req.user.id,
+              lastDeliveredAt: new Date(),
+            },
+          },
+        },
+      });
 
-      // 🧾 DELIVERY LOG
-      await DeliveryLog.create({
-        medicine: medicine._id,
-        quantity: Number(quantity),
+      logs.push({
+        medicine: medicineId,
+        quantity: qty,
         deliveredBy: req.user.id,
       });
+    }
 
-      // 📩 TELEGRAM BATCH GA QO‘SHAMIZ
-      addToTelegramBatch(
-        `💊 <b>${medicine.name}</b>\n` +
-          `➕ Qo‘shildi: <b>${quantity}</b> dona\n` +
-          `📦 Hozir omborda: <b>${medicine.quantity}</b> dona\n`,
+    if (!ops.length) {
+      return res.status(400).json({ message: "Yaroqli delivery topilmadi" });
+    }
+
+    /* ⚡ BIR YO‘LA */
+    const result = await Medicine.bulkWrite(ops);
+
+    await DeliveryLog.insertMany(logs);
+
+    /* 📩 TELEGRAM */
+    for (const log of logs) {
+      telegramMsgs.push(
+        `💊 <b>Medicine ID:</b> ${log.medicine}\n` +
+          `➕ Qo‘shildi: <b>${log.quantity}</b> dona`,
       );
     }
+    telegramMsgs.forEach(addToTelegramBatch);
 
     res.json({
       message: "Dorilar muvaffaqiyatli omborga qo‘shildi",
+      modified: result.modifiedCount,
     });
   } catch (e) {
     console.error("DELIVERY ERROR:", e);
-    res.status(500).json({
-      message: "Delivery xatoligi",
-    });
+    res.status(500).json({ message: "Delivery xatoligi" });
   }
 });
 
@@ -73,46 +86,46 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
 /* ================================================= */
 router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
   try {
-    const medicines = await Medicine.find().sort({ name: 1 });
+    const medicines = await Medicine.find()
+      .select("name quantity minLevel")
+      .sort({ name: 1 })
+      .lean();
+
     res.json(medicines);
   } catch (e) {
-    res.status(500).json({
-      message: "Dorilarni olishda xatolik",
-    });
+    res.status(500).json({ message: "Dorilarni olishda xatolik" });
   }
 });
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — DORI ISHLATISH */
+/* 👩‍⚕️ NURSE — DORI ISHLATISH (ATOMIC) */
 /* ================================================= */
 router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
   try {
-    const { quantity } = req.body;
+    const qty = Number(req.body.quantity);
 
-    if (!quantity || quantity <= 0) {
+    if (!qty || qty <= 0) {
       return res.status(400).json({ message: "Miqdor noto‘g‘ri" });
     }
 
-    const medicine = await Medicine.findById(req.params.id);
-    if (!medicine) {
-      return res.status(404).json({ message: "Dori topilmadi" });
-    }
+    const updated = await Medicine.findOneAndUpdate(
+      { _id: req.params.id, quantity: { $gte: qty } },
+      { $inc: { quantity: -qty } },
+      { new: true },
+    );
 
-    if (medicine.quantity < quantity) {
-      return res.status(400).json({ message: "Dori yetarli emas" });
+    if (!updated) {
+      return res
+        .status(400)
+        .json({ message: "Dori yetarli emas yoki topilmadi" });
     }
-
-    medicine.quantity -= Number(quantity);
-    await medicine.save();
 
     res.json({
       message: "Dori ishlatildi",
-      medicine,
+      medicine: updated,
     });
   } catch (e) {
-    res.status(500).json({
-      message: "Dori ishlatishda xatolik",
-    });
+    res.status(500).json({ message: "Dori ishlatishda xatolik" });
   }
 });
 
@@ -120,7 +133,8 @@ router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
 /* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR */
 /* ================================================= */
 router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
-  const meds = await Medicine.find().sort({ updatedAt: -1 });
+  const meds = await Medicine.find().sort({ updatedAt: -1 }).lean();
+
   res.json(meds);
 });
 
@@ -130,7 +144,9 @@ router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
 router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
   const alerts = await Medicine.find({
     $expr: { $lte: ["$quantity", "$minLevel"] },
-  }).sort({ quantity: 1 });
+  })
+    .sort({ quantity: 1 })
+    .lean();
 
   res.json(alerts);
 });

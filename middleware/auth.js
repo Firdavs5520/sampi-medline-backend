@@ -4,20 +4,22 @@ import jwt from "jsonwebtoken";
 /* AUTH */
 /* ===================== */
 export function authMiddleware(req, res, next) {
+  const header = req.headers.authorization;
+
+  if (!header || !header.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Token mavjud emas" });
+  }
+
+  const token = header.slice(7); // "Bearer " dan keyin
+
   try {
-    const header = req.headers.authorization;
-
-    if (!header || !header.startsWith("Bearer ")) {
-      return res.status(401).json({ message: "Token mavjud emas" });
-    }
-
-    const token = header.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = {
+    // req.user ni himoyalaymiz (tasodifan overwrite bo‘lmasin)
+    req.user = Object.freeze({
       id: decoded.id,
       role: decoded.role,
-    };
+    });
 
     next();
   } catch (e) {

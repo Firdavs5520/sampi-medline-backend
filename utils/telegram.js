@@ -1,17 +1,24 @@
-export async function sendTelegram(message) {
-  try {
-    const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+import { sendTelegram } from "./sendTelegram.js";
 
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: process.env.TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: "HTML",
-      }),
-    });
-  } catch (err) {
-    console.error("TELEGRAM ERROR:", err.message);
-  }
+let buffer = [];
+let timer = null;
+
+const FLUSH_DELAY = 1500; // 1.5 soniya ichida kelganlarni bitta qiladi
+
+export function addToTelegramBatch(text) {
+  buffer.push(text);
+
+  // agar taymer allaqachon ishlayapti — qayta yoqmaymiz
+  if (timer) return;
+
+  timer = setTimeout(async () => {
+    const message =
+      "🚚 <b>Yangi dori yetkazib berildi</b>\n\n" +
+      buffer.join("\n-----------------\n");
+
+    buffer = [];
+    timer = null;
+
+    await sendTelegram(message);
+  }, FLUSH_DELAY);
 }

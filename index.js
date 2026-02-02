@@ -16,11 +16,12 @@ dotenv.config();
 const app = express();
 
 /* ===================== */
-/* CORS — NODE 22 SAFE */
+/* CORS */
 /* ===================== */
 app.use(
   cors({
     origin: ["http://localhost:5173", "https://sampi-medline.vercel.app"],
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
@@ -29,7 +30,7 @@ app.use(
 /* ===================== */
 /* BODY PARSER */
 /* ===================== */
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 /* ===================== */
 /* HEALTH CHECK */
@@ -44,9 +45,17 @@ app.get("/", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/medicines", medicineRoutes);
 app.use("/api/services", serviceRoutes);
-app.use("/api/administrations", administrationRoutes);
+app.use("/api/administrations", administrationRoutes); // ✅ bulk shu yerda
 app.use("/api/reports", reportRoutes);
 app.use("/api/delivery-logs", deliveryLogRoutes);
+
+/* ===================== */
+/* 404 HANDLER */
+/* ===================== */
+app.use((_req, res) => {
+  res.status(404).json({ message: "Route topilmadi" });
+});
+
 /* ===================== */
 /* ERROR HANDLER */
 /* ===================== */
@@ -61,7 +70,10 @@ app.use((err, _req, res, _next) => {
 const PORT = process.env.PORT || 10000;
 
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, {
+    maxPoolSize: 10, // ⚡ parallel requestlar uchun
+    serverSelectionTimeoutMS: 5000,
+  })
   .then(() => {
     console.log("✅ MongoDB connected");
     app.listen(PORT, () => {

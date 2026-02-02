@@ -13,27 +13,42 @@ const userSchema = new mongoose.Schema(
       required: true,
       unique: true,
       lowercase: true,
+      trim: true,
+      index: true, // ⚡ login tez
     },
 
     password: {
       type: String,
       required: true,
+      select: false, // 🔒 default holatda chiqmaydi
     },
 
     role: {
       type: String,
       enum: ["delivery", "manager", "nurse"],
       required: true,
+      index: true, // ⚡ role bo‘yicha filter tez
     },
 
     isActive: {
       type: Boolean,
       default: true,
+      index: true, // ⚡ aktiv userlar tez
     },
   },
   {
     timestamps: true,
+    versionKey: false,
   },
 );
+
+/* ===================== */
+/* 🔥 INDEXLAR */
+/* ===================== */
+// tez login + tekshiruv
+userSchema.index({ email: 1 });
+
+// role + aktivlik bo‘yicha filter
+userSchema.index({ role: 1, isActive: 1 });
 
 export default mongoose.model("User", userSchema);
