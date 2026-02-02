@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true, // ⚡ login tez
+      index: true, // ⚡ login tez (BITTA JOYDA)
     },
 
     password: {
@@ -43,12 +43,9 @@ const userSchema = new mongoose.Schema(
 );
 
 /* ===================== */
-/* 🔥 INDEXLAR */
+/* 🔥 COMPOUND INDEX */
 /* ===================== */
-// tez login + tekshiruv
-userSchema.index({ email: 1 });
-
-// role + aktivlik bo‘yicha filter
+// role + aktivlik bo‘yicha tez filter
 userSchema.index({ role: 1, isActive: 1 });
 
 export default mongoose.model("User", userSchema);
