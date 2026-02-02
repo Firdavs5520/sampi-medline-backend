@@ -1,84 +1,71 @@
 import express from "express";
 import Administration from "../models/Administration.js";
+import AdministrationOrder from "../models/AdministrationOrder.js";
 import Medicine from "../models/Medicine.js";
 import { auth, allowRoles } from "../middleware/auth.js";
 
 const router = express.Router();
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — BITTA DORI / XIZMAT QO‘SHISH (ESKI) */
-/* ================================================= */
-router.post("/", auth, allowRoles("nurse"), async (req, res) => {
-  try {
-    const { patientName, type, name, quantity, price } = req.body;
-
-    if (!patientName || !type || !name || price == null) {
-      return res.status(400).json({
-        message: "Majburiy maydonlar yetishmayapti",
-      });
-    }
-
-    if (!["medicine", "service"].includes(type)) {
-      return res.status(400).json({
-        message: "Type noto‘g‘ri",
-      });
-    }
-
-    const admin = await Administration.create({
-      patientName,
-      type,
-      name,
-      quantity: type === "medicine" ? Number(quantity || 1) : 1,
-      price: Number(price),
-      nurseId: req.user.id,
-      date: new Date(),
-    });
-
-    res.status(201).json(admin);
-  } catch (error) {
-    console.error("ADMINISTRATION CREATE ERROR:", error);
-    res.status(500).json({
-      message: "Administration saqlashda xatolik",
-    });
-  }
-});
-
-/* ================================================= */
-/* 👩‍⚕️ NURSE — BULK (KO‘P DORI / XIZMATNI BIR YO‘LA) */
+/* 👩‍⚕️ NURSE — BULK ORDER (1 BEMOR = 1 CHEK) */
 /* ================================================= */
 router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
   try {
     const { patientName, items } = req.body;
 
-    if (!patientName || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({
-        message: "patientName yoki items noto‘g‘ri",
-      });
+    if (!patientName || !Array.isArray(items) || !items.length) {
+      return res.status(400).json({ message: "Noto‘g‘ri ma’lumot" });
     }
 
-    const administrations = [];
+    const nurseId = req.user.id;
+
+    /* ===================== */
+    /* 1️⃣ JAMI HISOB */
+    /* ===================== */
+    let total = 0;
+    for (const i of items) {
+      total += i.price * (i.quantity || 1);
+    }
+
+    /* ===================== */
+    /* 2️⃣ ORDER (CHEK) */
+    /* ===================== */
+    const order = await AdministrationOrder.create({
+      patientName,
+      nurseId,
+      items: items.map((i) => ({
+        type: i.type,
+        name: i.name,
+        quantity: i.type === "medicine" ? Number(i.quantity || 1) : 1,
+        price: Number(i.price),
+        medicineId: i.type === "medicine" ? i._id : null,
+        serviceId: i.type === "service" ? i.serviceId : null,
+      })),
+      total,
+      date: new Date(),
+    });
+
+    /* ===================== */
+    /* 3️⃣ LOG + OMBOR */
+    /* ===================== */
+    const logs = [];
     const medicineOps = [];
 
     for (const i of items) {
-      if (!i.type || !i.name || i.price == null) {
-        return res.status(400).json({
-          message: "Items ichida noto‘g‘ri ma’lumot bor",
-        });
-      }
-
       const qty = i.type === "medicine" ? Number(i.quantity || 1) : 1;
 
-      administrations.push({
+      // LOG
+      logs.push({
         patientName,
         type: i.type,
         name: i.name,
         quantity: qty,
         price: Number(i.price),
-        nurseId: req.user.id,
+        nurseId,
         date: new Date(),
       });
 
-      /* 🔻 OMBORDAN AYIRISH (AGAR DORI BO‘LSA) */
+      // OMBOR
       if (i.type === "medicine" && i._id) {
         medicineOps.push({
           updateOne: {
@@ -89,26 +76,26 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
       }
     }
 
-    /* ⚡ HAMMASINI BIR YO‘LA */
     await Promise.all([
-      Administration.insertMany(administrations),
+      Administration.insertMany(logs),
       medicineOps.length ? Medicine.bulkWrite(medicineOps) : Promise.resolve(),
     ]);
 
     res.status(201).json({
       success: true,
-      count: administrations.length,
+      orderId: order._id,
+      total,
     });
   } catch (error) {
     console.error("ADMINISTRATION BULK ERROR:", error);
     res.status(500).json({
-      message: "Bulk saqlashda xatolik",
+      message: "Bulk order saqlashda xatolik",
     });
   }
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — OMBOR HARAKATI (LOG) */
+/* 👨‍💼 MANAGER — LOGS (ESKI ISHLAYVERADI) */
 /* ================================================= */
 router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
   try {
@@ -116,11 +103,10 @@ router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
       .populate("nurseId", "name role")
       .sort({ createdAt: -1 })
       .limit(200)
-      .lean(); // ⚡ tezroq
+      .lean();
 
     res.json(logs);
   } catch (error) {
-    console.error("ADMINISTRATION LOG ERROR:", error);
     res.status(500).json({
       message: "Ombor harakatini olishda xatolik",
     });
