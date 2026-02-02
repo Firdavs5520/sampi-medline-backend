@@ -13,19 +13,30 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
   try {
     const { patientName, items } = req.body;
 
-    if (!patientName || !Array.isArray(items) || !items.length) {
+    if (!patientName || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: "Noto‘g‘ri ma’lumot" });
     }
 
     const nurseId = req.user.id;
 
     /* ===================== */
-    /* 1️⃣ JAMI HISOB */
+    /* 1️⃣ ITEMS + JAMI */
     /* ===================== */
     let total = 0;
-    for (const i of items) {
-      total += i.price * (i.quantity || 1);
-    }
+
+    const orderItems = items.map((i) => {
+      const qty = i.type === "medicine" ? Number(i.quantity || 1) : 1;
+      total += Number(i.price) * qty;
+
+      return {
+        type: i.type,
+        name: i.name,
+        quantity: qty,
+        price: Number(i.price),
+        medicineId: i.type === "medicine" ? i._id : null,
+        serviceId: i.type === "service" ? i.serviceId : null,
+      };
+    });
 
     /* ===================== */
     /* 2️⃣ ORDER (CHEK) */
@@ -33,14 +44,7 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     const order = await AdministrationOrder.create({
       patientName,
       nurseId,
-      items: items.map((i) => ({
-        type: i.type,
-        name: i.name,
-        quantity: i.type === "medicine" ? Number(i.quantity || 1) : 1,
-        price: Number(i.price),
-        medicineId: i.type === "medicine" ? i._id : null,
-        serviceId: i.type === "service" ? i.serviceId : null,
-      })),
+      items: orderItems,
       total,
       date: new Date(),
     });
@@ -51,26 +55,22 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     const logs = [];
     const medicineOps = [];
 
-    for (const i of items) {
-      const qty = i.type === "medicine" ? Number(i.quantity || 1) : 1;
-
-      // LOG
+    for (const i of orderItems) {
       logs.push({
         patientName,
         type: i.type,
         name: i.name,
-        quantity: qty,
-        price: Number(i.price),
+        quantity: i.quantity,
+        price: i.price,
         nurseId,
         date: new Date(),
       });
 
-      // OMBOR
-      if (i.type === "medicine" && i._id) {
+      if (i.type === "medicine" && i.medicineId) {
         medicineOps.push({
           updateOne: {
-            filter: { _id: i._id },
-            update: { $inc: { quantity: -qty } },
+            filter: { _id: i.medicineId },
+            update: { $inc: { quantity: -i.quantity } },
           },
         });
       }
@@ -90,6 +90,26 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     console.error("ADMINISTRATION BULK ERROR:", error);
     res.status(500).json({
       message: "Bulk order saqlashda xatolik",
+    });
+  }
+});
+
+/* ================================================= */
+/* 🧾 PUBLIC — CHEK UCHUN ORDER (AUTH YO‘Q) */
+/* ================================================= */
+router.get("/public/orders/:id", async (req, res) => {
+  try {
+    const order = await AdministrationOrder.findById(req.params.id).lean();
+
+    if (!order) {
+      return res.status(404).json({ message: "Chek topilmadi" });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error("PUBLIC ORDER ERROR:", error);
+    res.status(500).json({
+      message: "Chekni olishda xatolik",
     });
   }
 });
