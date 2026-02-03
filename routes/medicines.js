@@ -7,9 +7,6 @@ import { addToTelegramBatch } from "../utils/telegramBatch.js";
 
 const router = express.Router();
 
-/* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR */
-/* ================================================= */
 router.get(
   "/",
   auth,
@@ -27,6 +24,7 @@ router.get(
 /* ================================================= */
 /* 👩‍⚕️ NURSE — YANGI DORI QO‘SHISH */
 /* ================================================= */
+
 router.post("/", auth, allowRoles("nurse"), async (req, res) => {
   try {
     const { name, price, unit, minLevel } = req.body;
@@ -56,10 +54,9 @@ router.post("/", auth, allowRoles("nurse"), async (req, res) => {
     }
 
     console.error("CREATE MEDICINE ERROR:", e);
-    res.status(500).json({ message: "Dori qo‘shilmadi" });
+    res.status(500).json({ message: "Dori qo‘shilmadi." });
   }
 });
-
 /* ================================================= */
 /* 👩‍⚕️ NURSE — DORI TAHRIRLASH */
 /* ================================================= */
@@ -86,7 +83,9 @@ router.put("/:id", auth, allowRoles("nurse"), async (req, res) => {
     res.json(updated);
   } catch (e) {
     console.error("UPDATE MEDICINE ERROR:", e);
-    res.status(500).json({ message: "Dori tahrirlanmadi" });
+    res
+      .status(500)
+      .json({ message: "Dori tahrirlanmadi. Qandaydir xatolik yuz berdi." });
   }
 });
 
@@ -232,9 +231,6 @@ router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
   }
 });
 
-/* ================================================= */
-/* 🚚 DELIVERY — DORI RO‘YXATI */
-/* ================================================= */
 router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
   try {
     const medicines = await Medicine.find()
