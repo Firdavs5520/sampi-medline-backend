@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import Administration from "../models/Administration.js";
 import AdministrationOrder from "../models/AdministrationOrder.js";
 import Medicine from "../models/Medicine.js";
@@ -7,17 +8,21 @@ import { auth, allowRoles } from "../middleware/auth.js";
 const router = express.Router();
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — BULK ORDER (1 BEMOR = 1 CHEK) */
+/* 👩‍⚕️ NURSE — BULK ORDER (ATOMIC, 1 BEMOR = 1 CHEK) */
 /* ================================================= */
 router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
     const { patientName, items } = req.body;
 
-    if (!patientName || !Array.isArray(items) || items.length === 0) {
+    if (!patientName || !Array.isArray(items) || !items.length) {
       return res.status(400).json({ message: "Noto‘g‘ri ma’lumot" });
     }
 
     const nurseId = req.user.id;
+
+    session.startTransaction();
 
     /* ===================== */
     /* 1️⃣ ITEMS + JAMI */
@@ -39,47 +44,67 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     });
 
     /* ===================== */
-    /* 2️⃣ ORDER (CHEK) */
+    /* 2️⃣ OMBOR TEKSHIRISH + AYIRISH */
     /* ===================== */
-    const order = await AdministrationOrder.create({
-      patientName,
-      nurseId,
-      items: orderItems,
-      total,
-      date: new Date(),
-    });
-
-    /* ===================== */
-    /* 3️⃣ LOG + OMBOR */
-    /* ===================== */
-    const logs = [];
-    const medicineOps = [];
-
     for (const i of orderItems) {
-      logs.push({
-        patientName,
-        type: i.type,
-        name: i.name,
-        quantity: i.quantity,
-        price: i.price,
-        nurseId,
-        date: new Date(),
-      });
+      if (i.type !== "medicine") continue;
 
-      if (i.type === "medicine" && i.medicineId) {
-        medicineOps.push({
-          updateOne: {
-            filter: { _id: i.medicineId },
-            update: { $inc: { quantity: -i.quantity } },
-          },
-        });
+      const med = await Medicine.findOne(
+        {
+          _id: i.medicineId,
+          quantity: { $gte: i.quantity },
+        },
+        null,
+        { session },
+      );
+
+      if (!med) {
+        throw new Error(`Omborda yetarli emas: ${i.name}`);
       }
+
+      await Medicine.updateOne(
+        { _id: i.medicineId },
+        { $inc: { quantity: -i.quantity } },
+        { session },
+      );
     }
 
-    await Promise.all([
-      Administration.insertMany(logs),
-      medicineOps.length ? Medicine.bulkWrite(medicineOps) : Promise.resolve(),
-    ]);
+    /* ===================== */
+    /* 3️⃣ ORDER (CHEK) */
+    /* ===================== */
+    const [order] = await AdministrationOrder.create(
+      [
+        {
+          patientName,
+          nurseId,
+          items: orderItems,
+          total,
+          date: new Date(),
+        },
+      ],
+      { session },
+    );
+
+    /* ===================== */
+    /* 4️⃣ LOGS */
+    /* ===================== */
+    const logs = orderItems.map((i) => ({
+      patientName,
+      type: i.type,
+      name: i.name,
+      quantity: i.quantity,
+      price: i.price,
+      nurseId,
+      date: new Date(),
+    }));
+
+    await Administration.insertMany(logs, { session });
+
+    /* ===================== */
+    /* ✅ COMMIT */
+    /* ===================== */
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(201).json({
       success: true,
@@ -87,9 +112,13 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
       total,
     });
   } catch (error) {
-    console.error("ADMINISTRATION BULK ERROR:", error);
-    res.status(500).json({
-      message: "Bulk order saqlashda xatolik",
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error("ADMINISTRATION BULK ERROR:", error.message);
+
+    res.status(400).json({
+      message: error.message || "Bulk order saqlashda xatolik",
     });
   }
 });
@@ -108,14 +137,12 @@ router.get("/public/orders/:id", async (req, res) => {
     res.json(order);
   } catch (error) {
     console.error("PUBLIC ORDER ERROR:", error);
-    res.status(500).json({
-      message: "Chekni olishda xatolik",
-    });
+    res.status(500).json({ message: "Chekni olishda xatolik" });
   }
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — LOGS (ESKI ISHLAYVERADI) */
+/* 👨‍💼 MANAGER — LOGS */
 /* ================================================= */
 router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
   try {
@@ -126,7 +153,7 @@ router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
       .lean();
 
     res.json(logs);
-  } catch (error) {
+  } catch {
     res.status(500).json({
       message: "Ombor harakatini olishda xatolik",
     });
