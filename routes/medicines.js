@@ -8,7 +8,7 @@ import { addToTelegramBatch } from "../utils/telegramBatch.js";
 const router = express.Router();
 
 /* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR (KO‘RISH) */
+/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR */
 /* ================================================= */
 router.get(
   "/",
@@ -25,26 +25,36 @@ router.get(
 );
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — DORI QO‘SHISH */
+/* 👩‍⚕️ NURSE — YANGI DORI QO‘SHISH */
 /* ================================================= */
 router.post("/", auth, allowRoles("nurse"), async (req, res) => {
   try {
-    const { name, price, quantity, unit, minLevel } = req.body;
+    const { name, price, unit, minLevel } = req.body;
 
-    if (!name || price == null || quantity == null) {
-      return res.status(400).json({ message: "Maʼlumotlar yetarli emas" });
+    // ❗ quantity bu yerda MAJBURIY EMAS
+    if (!name || price == null) {
+      return res.status(400).json({
+        message: "Dori nomi va narxi majburiy",
+      });
     }
 
     const medicine = await Medicine.create({
       name: name.trim(),
       price: Number(price),
-      quantity: Number(quantity),
+      quantity: 0, // ✅ har doim 0 dan boshlanadi
       unit: unit || "dona",
-      minLevel: Number(minLevel || 0),
+      minLevel: Number(minLevel ?? 5),
     });
 
     res.status(201).json(medicine);
   } catch (e) {
+    // 🔴 duplicate name
+    if (e.code === 11000) {
+      return res.status(400).json({
+        message: "Bu nomdagi dori allaqachon mavjud",
+      });
+    }
+
     console.error("CREATE MEDICINE ERROR:", e);
     res.status(500).json({ message: "Dori qo‘shilmadi" });
   }
@@ -131,24 +141,22 @@ router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 🚚 DELIVERY — OMBORGA KIRITISH (BULK) */
+/* 🚚 DELIVERY — OMBORGA QO‘SHISH (BULK) */
 /* ================================================= */
 router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    let items = [];
+    const items = Array.isArray(req.body.items)
+      ? req.body.items
+      : req.body.medicineId && req.body.quantity
+        ? [{ medicineId: req.body.medicineId, quantity: req.body.quantity }]
+        : [];
 
-    if (Array.isArray(req.body.items)) {
-      items = req.body.items;
-    } else if (req.body.medicineId && req.body.quantity) {
-      items = [
-        { medicineId: req.body.medicineId, quantity: req.body.quantity },
-      ];
-    } else {
-      return res
-        .status(400)
-        .json({ message: "Delivery maʼlumotlari noto‘g‘ri" });
+    if (!items.length) {
+      return res.status(400).json({
+        message: "Delivery maʼlumotlari noto‘g‘ri",
+      });
     }
 
     session.startTransaction();
@@ -208,7 +216,7 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — KAM QOLGAN DORILAR (ALERT) */
+/* 👨‍💼 MANAGER — KAM QOLGAN DORILAR */
 /* ================================================= */
 router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
   try {
@@ -223,8 +231,9 @@ router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
     res.status(500).json({ message: "Alertlarni olishda xatolik" });
   }
 });
+
 /* ================================================= */
-/* 🚚 DELIVERY — DORI RO‘YXATI (OMBOR) */
+/* 🚚 DELIVERY — DORI RO‘YXATI */
 /* ================================================= */
 router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
   try {
@@ -234,8 +243,8 @@ router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
       .lean();
 
     res.json(medicines);
-  } catch (error) {
-    console.error("FOR DELIVERY ERROR:", error);
+  } catch (e) {
+    console.error("FOR DELIVERY ERROR:", e);
     res.status(500).json({
       message: "Dorilarni olishda xatolik",
     });
