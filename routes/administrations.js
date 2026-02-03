@@ -22,6 +22,7 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
 
     const nurseId = req.user.id;
 
+    /* 🔒 TRANSACTION */
     session.startTransaction();
 
     /* ===================== */
@@ -29,7 +30,7 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     /* ===================== */
     let total = 0;
     for (const i of items) {
-      total += i.price * (i.quantity || 1);
+      total += Number(i.price) * Number(i.quantity || 1);
     }
 
     /* ===================== */
@@ -74,12 +75,21 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
         date: new Date(),
       });
 
-      // OMBOR (HAVFSIZ TEKSHIRISH)
+      /* 🔥 OMBORNI TEMIR TEKSHIRUV */
       if (i.type === "medicine" && i._id) {
         const updated = await Medicine.findOneAndUpdate(
-          { _id: i._id, quantity: { $gte: qty } },
-          { $inc: { quantity: -qty } },
-          { session },
+          {
+            _id: i._id,
+            quantity: { $gte: qty }, // 🔒 0 dan past tushmaydi
+          },
+          {
+            $inc: { quantity: -qty },
+            $set: { updatedAt: new Date() },
+          },
+          {
+            session,
+            new: true,
+          },
         );
 
         if (!updated) {
@@ -96,7 +106,7 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       orderId: order._id,
       total,
@@ -107,14 +117,14 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
 
     console.error("ADMINISTRATION BULK ERROR:", error.message);
 
-    res.status(400).json({
+    return res.status(400).json({
       message: error.message || "Bulk order saqlashda xatolik",
     });
   }
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — LOGS (ESKI ISHLAYVERADI) */
+/* 👨‍💼 MANAGER — LOGS */
 /* ================================================= */
 router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
   try {
@@ -131,8 +141,9 @@ router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
     });
   }
 });
+
 /* ================================================= */
-/* 🧾 PUBLIC — CHEK UCHUN ORDER (AUTH YO‘Q) */
+/* 🧾 PUBLIC — CHEK (AUTH YO‘Q) */
 /* ================================================= */
 router.get("/public/orders/:id", async (req, res) => {
   try {
