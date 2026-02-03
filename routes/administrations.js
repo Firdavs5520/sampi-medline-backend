@@ -131,5 +131,22 @@ router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
     });
   }
 });
+/* ================================================= */
+/* 🧾 PUBLIC — CHEK UCHUN ORDER (AUTH YO‘Q) */
+/* ================================================= */
+router.get("/public/orders/:id", async (req, res) => {
+  try {
+    const order = await AdministrationOrder.findById(req.params.id).lean();
+
+    if (!order) {
+      return res.status(404).json({ message: "Chek topilmadi" });
+    }
+
+    res.json(order);
+  } catch (error) {
+    console.error("PUBLIC ORDER ERROR:", error);
+    res.status(500).json({ message: "Chekni olishda xatolik" });
+  }
+});
 
 export default router;
