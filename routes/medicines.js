@@ -1,154 +1,94 @@
 import express from "express";
-import Medicine from "../models/Medicine.js";
-import DeliveryLog from "../models/DeliveryLog.js";
+import Service from "../models/Service.js";
 import { auth, allowRoles } from "../middleware/auth.js";
-import { addToTelegramBatch } from "../utils/telegramBatch.js";
 
 const router = express.Router();
 
 /* ================================================= */
-/* 🚚 DELIVERY — BULK (Juda tez) */
+/* 👩‍⚕️ + 👨‍💼 — BARCHA XIZMATLAR (KO‘RISH) */
 /* ================================================= */
-router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
+router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
   try {
-    let items = [];
+    const services = await Service.find().sort({ name: 1 }).lean();
+    res.json(services);
+  } catch (e) {
+    res.status(500).json({ message: "Xizmatlarni olishda xatolik" });
+  }
+});
 
-    if (Array.isArray(req.body.items)) {
-      items = req.body.items;
-    } else if (req.body.medicineId && req.body.quantity) {
-      items = [
-        { medicineId: req.body.medicineId, quantity: req.body.quantity },
-      ];
-    } else {
-      return res
-        .status(400)
-        .json({ message: "Delivery maʼlumotlari noto‘g‘ri" });
-    }
+/* ================================================= */
+/* 👨‍💼 MANAGER — CREATE SERVICE */
+/* ================================================= */
+router.post("/", auth, allowRoles("manager"), async (req, res) => {
+  try {
+    const { name, variants } = req.body;
 
-    const ops = [];
-    const logs = [];
-    const telegramMsgs = [];
-
-    for (const { medicineId, quantity } of items) {
-      const qty = Number(quantity);
-      if (!medicineId || qty <= 0) continue;
-
-      ops.push({
-        updateOne: {
-          filter: { _id: medicineId },
-          update: {
-            $inc: { quantity: qty },
-            $set: {
-              lastDeliveredBy: req.user.id,
-              lastDeliveredAt: new Date(),
-            },
-          },
-        },
-      });
-
-      logs.push({
-        medicine: medicineId,
-        quantity: qty,
-        deliveredBy: req.user.id,
+    if (!name || !Array.isArray(variants) || !variants.length) {
+      return res.status(400).json({
+        message: "Xizmat nomi yoki variantlar noto‘g‘ri",
       });
     }
 
-    if (!ops.length) {
-      return res.status(400).json({ message: "Yaroqli delivery topilmadi" });
-    }
-
-    /* ⚡ BIR YO‘LA */
-    const result = await Medicine.bulkWrite(ops);
-
-    await DeliveryLog.insertMany(logs);
-
-    /* 📩 TELEGRAM */
-    for (const log of logs) {
-      telegramMsgs.push(
-        `💊 <b>Medicine ID:</b> ${log.medicine}\n` +
-          `➕ Qo‘shildi: <b>${log.quantity}</b> dona`,
-      );
-    }
-    telegramMsgs.forEach(addToTelegramBatch);
-
-    res.json({
-      message: "Dorilar muvaffaqiyatli omborga qo‘shildi",
-      modified: result.modifiedCount,
+    const service = await Service.create({
+      name: name.trim(),
+      variants: variants.map((v) => ({
+        label: v.label,
+        price: Number(v.price),
+      })),
     });
+
+    res.status(201).json(service);
   } catch (e) {
-    console.error("DELIVERY ERROR:", e);
-    res.status(500).json({ message: "Delivery xatoligi" });
+    res.status(500).json({ message: "Xizmat qo‘shishda xatolik" });
   }
 });
 
 /* ================================================= */
-/* 🚚 DELIVERY — DORI RO‘YXATI */
+/* 👨‍💼 MANAGER — UPDATE SERVICE */
 /* ================================================= */
-router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
+router.put("/:id", auth, allowRoles("manager"), async (req, res) => {
   try {
-    const medicines = await Medicine.find()
-      .select("name quantity minLevel")
-      .sort({ name: 1 })
-      .lean();
+    const { name, variants } = req.body;
 
-    res.json(medicines);
-  } catch (e) {
-    res.status(500).json({ message: "Dorilarni olishda xatolik" });
-  }
-});
-
-/* ================================================= */
-/* 👩‍⚕️ NURSE — DORI ISHLATISH (ATOMIC) */
-/* ================================================= */
-router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
-  try {
-    const qty = Number(req.body.quantity);
-
-    if (!qty || qty <= 0) {
-      return res.status(400).json({ message: "Miqdor noto‘g‘ri" });
-    }
-
-    const updated = await Medicine.findOneAndUpdate(
-      { _id: req.params.id, quantity: { $gte: qty } },
-      { $inc: { quantity: -qty } },
+    const updated = await Service.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...(name && { name: name.trim() }),
+        ...(variants && {
+          variants: variants.map((v) => ({
+            label: v.label,
+            price: Number(v.price),
+          })),
+        }),
+      },
       { new: true },
     );
 
     if (!updated) {
-      return res
-        .status(400)
-        .json({ message: "Dori yetarli emas yoki topilmadi" });
+      return res.status(404).json({ message: "Xizmat topilmadi" });
     }
 
-    res.json({
-      message: "Dori ishlatildi",
-      medicine: updated,
-    });
+    res.json(updated);
   } catch (e) {
-    res.status(500).json({ message: "Dori ishlatishda xatolik" });
+    res.status(500).json({ message: "Xizmatni yangilashda xatolik" });
   }
 });
 
 /* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR */
+/* 👨‍💼 MANAGER — DELETE SERVICE */
 /* ================================================= */
-router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
-  const meds = await Medicine.find().sort({ updatedAt: -1 }).lean();
+router.delete("/:id", auth, allowRoles("manager"), async (req, res) => {
+  try {
+    const deleted = await Service.findByIdAndDelete(req.params.id);
 
-  res.json(meds);
-});
+    if (!deleted) {
+      return res.status(404).json({ message: "Xizmat topilmadi" });
+    }
 
-/* ================================================= */
-/* 👨‍💼 MANAGER — KAM QOLGAN DORILAR */
-/* ================================================= */
-router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
-  const alerts = await Medicine.find({
-    $expr: { $lte: ["$quantity", "$minLevel"] },
-  })
-    .sort({ quantity: 1 })
-    .lean();
-
-  res.json(alerts);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ message: "Xizmatni o‘chirishda xatolik" });
+  }
 });
 
 export default router;
