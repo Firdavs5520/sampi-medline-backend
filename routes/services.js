@@ -5,7 +5,7 @@ import { auth, allowRoles } from "../middleware/auth.js";
 const router = express.Router();
 
 /* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — BARCHA XIZMATLAR (KO‘RISH) */
+/* 👩‍⚕️ + 👨‍💼 — BARCHA XIZMATLAR */
 /* ================================================= */
 router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
   try {
@@ -14,25 +14,39 @@ router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
       .lean();
 
     res.json(services);
-  } catch (e) {
+  } catch {
     res.status(500).json({ message: "Xizmatlarni olishda xatolik" });
   }
 });
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — XIZMAT QO‘SHISH */
+/* 👩‍⚕️ NURSE — CREATE SERVICE (VARIANTLI) */
 /* ================================================= */
 router.post("/", auth, allowRoles("nurse"), async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, variants } = req.body;
 
-    if (!name || price == null) {
-      return res.status(400).json({ message: "Maʼlumotlar yetarli emas" });
+    if (!name || !Array.isArray(variants) || variants.length === 0) {
+      return res.status(400).json({
+        message: "Xizmat nomi yoki variantlar noto‘g‘ri",
+      });
+    }
+
+    const cleanVariants = variants.map((v) => ({
+      label: String(v.label).trim(),
+      count: Number(v.count || 1),
+      price: Number(v.price),
+    }));
+
+    if (cleanVariants.some((v) => !v.price || v.price <= 0)) {
+      return res.status(400).json({
+        message: "Variant narxlari noto‘g‘ri",
+      });
     }
 
     const service = await Service.create({
       name: name.trim(),
-      price: Number(price),
+      variants: cleanVariants,
       isActive: true,
     });
 
@@ -44,17 +58,23 @@ router.post("/", auth, allowRoles("nurse"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — XIZMAT TAHRIRLASH */
+/* 👩‍⚕️ NURSE — UPDATE SERVICE */
 /* ================================================= */
 router.put("/:id", auth, allowRoles("nurse"), async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, variants } = req.body;
 
     const updated = await Service.findByIdAndUpdate(
       req.params.id,
       {
         ...(name && { name: name.trim() }),
-        ...(price != null && { price: Number(price) }),
+        ...(Array.isArray(variants) && {
+          variants: variants.map((v) => ({
+            label: String(v.label).trim(),
+            count: Number(v.count || 1),
+            price: Number(v.price),
+          })),
+        }),
       },
       { new: true },
     );
@@ -71,7 +91,7 @@ router.put("/:id", auth, allowRoles("nurse"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👩‍⚕️ NURSE — XIZMAT O‘CHIRISH (SOFT DELETE) */
+/* 👩‍⚕️ NURSE — DELETE SERVICE (SOFT) */
 /* ================================================= */
 router.delete("/:id", auth, allowRoles("nurse"), async (req, res) => {
   try {
