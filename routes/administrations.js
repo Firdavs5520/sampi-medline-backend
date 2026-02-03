@@ -25,59 +25,29 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     session.startTransaction();
 
     /* ===================== */
-    /* 1️⃣ ITEMS + JAMI */
+    /* 1️⃣ JAMI HISOB */
     /* ===================== */
     let total = 0;
-
-    const orderItems = items.map((i) => {
-      const qty = i.type === "medicine" ? Number(i.quantity || 1) : 1;
-      total += Number(i.price) * qty;
-
-      return {
-        type: i.type,
-        name: i.name,
-        quantity: qty,
-        price: Number(i.price),
-        medicineId: i.type === "medicine" ? i._id : null,
-        serviceId: i.type === "service" ? i.serviceId : null,
-      };
-    });
-
-    /* ===================== */
-    /* 2️⃣ OMBOR TEKSHIRISH + AYIRISH */
-    /* ===================== */
-    for (const i of orderItems) {
-      if (i.type !== "medicine") continue;
-
-      const med = await Medicine.findOne(
-        {
-          _id: i.medicineId,
-          quantity: { $gte: i.quantity },
-        },
-        null,
-        { session },
-      );
-
-      if (!med) {
-        throw new Error(`Omborda yetarli emas: ${i.name}`);
-      }
-
-      await Medicine.updateOne(
-        { _id: i.medicineId },
-        { $inc: { quantity: -i.quantity } },
-        { session },
-      );
+    for (const i of items) {
+      total += i.price * (i.quantity || 1);
     }
 
     /* ===================== */
-    /* 3️⃣ ORDER (CHEK) */
+    /* 2️⃣ ORDER (CHEK) */
     /* ===================== */
     const [order] = await AdministrationOrder.create(
       [
         {
           patientName,
           nurseId,
-          items: orderItems,
+          items: items.map((i) => ({
+            type: i.type,
+            name: i.name,
+            quantity: i.type === "medicine" ? Number(i.quantity || 1) : 1,
+            price: Number(i.price),
+            medicineId: i.type === "medicine" ? i._id : null,
+            serviceId: i.type === "service" ? i.serviceId : null,
+          })),
           total,
           date: new Date(),
         },
@@ -86,17 +56,37 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
     );
 
     /* ===================== */
-    /* 4️⃣ LOGS */
+    /* 3️⃣ LOG + OMBOR */
     /* ===================== */
-    const logs = orderItems.map((i) => ({
-      patientName,
-      type: i.type,
-      name: i.name,
-      quantity: i.quantity,
-      price: i.price,
-      nurseId,
-      date: new Date(),
-    }));
+    const logs = [];
+
+    for (const i of items) {
+      const qty = i.type === "medicine" ? Number(i.quantity || 1) : 1;
+
+      // LOG
+      logs.push({
+        patientName,
+        type: i.type,
+        name: i.name,
+        quantity: qty,
+        price: Number(i.price),
+        nurseId,
+        date: new Date(),
+      });
+
+      // OMBOR (HAVFSIZ TEKSHIRISH)
+      if (i.type === "medicine" && i._id) {
+        const updated = await Medicine.findOneAndUpdate(
+          { _id: i._id, quantity: { $gte: qty } },
+          { $inc: { quantity: -qty } },
+          { session },
+        );
+
+        if (!updated) {
+          throw new Error(`Omborda yetarli emas: ${i.name}`);
+        }
+      }
+    }
 
     await Administration.insertMany(logs, { session });
 
@@ -124,25 +114,7 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 🧾 PUBLIC — CHEK UCHUN ORDER (AUTH YO‘Q) */
-/* ================================================= */
-router.get("/public/orders/:id", async (req, res) => {
-  try {
-    const order = await AdministrationOrder.findById(req.params.id).lean();
-
-    if (!order) {
-      return res.status(404).json({ message: "Chek topilmadi" });
-    }
-
-    res.json(order);
-  } catch (error) {
-    console.error("PUBLIC ORDER ERROR:", error);
-    res.status(500).json({ message: "Chekni olishda xatolik" });
-  }
-});
-
-/* ================================================= */
-/* 👨‍💼 MANAGER — LOGS */
+/* 👨‍💼 MANAGER — LOGS (ESKI ISHLAYVERADI) */
 /* ================================================= */
 router.get("/logs", auth, allowRoles("manager"), async (_req, res) => {
   try {

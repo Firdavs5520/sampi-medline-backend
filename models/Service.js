@@ -1,12 +1,16 @@
 import mongoose from "mongoose";
 
-const ServiceVariantSchema = new mongoose.Schema(
+/* ===================== */
+/* SERVICE VARIANT */
+/* ===================== */
+const serviceVariantSchema = new mongoose.Schema(
   {
     label: {
       type: String,
-      required: true,
+      required: true, // masalan: "Oddiy", "Premium"
       trim: true,
     },
+
     price: {
       type: Number,
       required: true,
@@ -16,22 +20,34 @@ const ServiceVariantSchema = new mongoose.Schema(
   { _id: false },
 );
 
-const ServiceSchema = new mongoose.Schema(
+/* ===================== */
+/* SERVICE */
+/* ===================== */
+const serviceSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: true,
       trim: true,
-      index: true,
+      unique: true,
+      index: true, // ⚡ tez qidiruv
     },
+
     variants: {
-      type: [ServiceVariantSchema],
+      type: [serviceVariantSchema],
       default: [],
     },
+
+    basePrice: {
+      type: Number,
+      min: 0,
+      default: 0, // agar variant bo‘lmasa
+    },
+
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
+      index: true, // ⚡ aktiv xizmatlar tez
     },
   },
   {
@@ -40,4 +56,13 @@ const ServiceSchema = new mongoose.Schema(
   },
 );
 
-export default mongoose.model("Service", ServiceSchema);
+/* ===================== */
+/* 🔥 INDEXLAR */
+/* ===================== */
+// aktiv xizmatlarni tez olish
+serviceSchema.index({ isActive: 1, createdAt: -1 });
+
+// nom bo‘yicha tez sort / qidiruv
+serviceSchema.index({ name: 1 });
+
+export default mongoose.model("Service", serviceSchema);

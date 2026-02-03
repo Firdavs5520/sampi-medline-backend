@@ -9,7 +9,8 @@ const router = express.Router();
 /* ================================================= */
 router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
   try {
-    const services = await Service.find({ isActive: true })
+    // 🔧 faqat aktiv xizmatlar
+    const services = await Service.find({ isActive: { $ne: false } })
       .sort({ name: 1 })
       .lean();
 
@@ -20,7 +21,7 @@ router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — CREATE */
+/* 👨‍💼 MANAGER — CREATE SERVICE */
 /* ================================================= */
 router.post("/", auth, allowRoles("manager"), async (req, res) => {
   try {
@@ -38,6 +39,7 @@ router.post("/", auth, allowRoles("manager"), async (req, res) => {
         label: String(v.label).trim(),
         price: Number(v.price),
       })),
+      isActive: true,
     });
 
     res.status(201).json(service);
@@ -47,11 +49,11 @@ router.post("/", auth, allowRoles("manager"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — UPDATE */
+/* 👨‍💼 MANAGER — UPDATE SERVICE */
 /* ================================================= */
 router.put("/:id", auth, allowRoles("manager"), async (req, res) => {
   try {
-    const { name, variants, isActive } = req.body;
+    const { name, variants } = req.body;
 
     const updated = await Service.findByIdAndUpdate(
       req.params.id,
@@ -63,7 +65,6 @@ router.put("/:id", auth, allowRoles("manager"), async (req, res) => {
             price: Number(v.price),
           })),
         }),
-        ...(typeof isActive === "boolean" && { isActive }),
       },
       { new: true },
     );
@@ -79,7 +80,7 @@ router.put("/:id", auth, allowRoles("manager"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — SOFT DELETE */
+/* 👨‍💼 MANAGER — DELETE SERVICE (SOFT) */
 /* ================================================= */
 router.delete("/:id", auth, allowRoles("manager"), async (req, res) => {
   try {
