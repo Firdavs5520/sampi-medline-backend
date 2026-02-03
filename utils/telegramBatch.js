@@ -1,38 +1,20 @@
-let buffer = [];
+import telegram from "./telegram.js";
+
+let queue = [];
 let timer = null;
 
-const FLUSH_DELAY = 5000; // ⏳ 5 soniya (real)
+export const addToTelegramBatch = (text) => {
+  if (!text) return;
 
-async function flush() {
-  if (!buffer.length) return;
+  queue.push(text);
 
-  const message =
-    `🚚 <b>OMBORGA DORI KELDI</b>\n\n` +
-    buffer.join("\n-----------------\n") +
-    `\n\n🕒 ${new Date().toLocaleString()}`;
+  if (!timer) {
+    timer = setTimeout(async () => {
+      const message = queue.join("\n\n");
+      queue = [];
+      timer = null;
 
-  try {
-    const { sendTelegram } = await import("./telegram.js");
-    await sendTelegram(message);
-  } catch (e) {
-    console.error("TELEGRAM BATCH SEND ERROR:", e.message);
-  } finally {
-    buffer = [];
-    timer = null;
+      await telegram(message);
+    }, 2000); // 2 soniyada bitta xabar
   }
-}
-
-export function addToTelegramBatch(text) {
-  buffer.push(text);
-
-  // agar timer ishlayapti — yangisini qo‘ymaymiz
-  if (timer) return;
-
-  timer = setTimeout(flush, FLUSH_DELAY);
-}
-
-/* ===================== */
-/* 🔒 SERVER O‘CHAYOTGANDA */
-/* ===================== */
-process.on("SIGTERM", flush);
-process.on("SIGINT", flush);
+};
