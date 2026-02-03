@@ -223,5 +223,23 @@ router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
     res.status(500).json({ message: "Alertlarni olishda xatolik" });
   }
 });
+/* ================================================= */
+/* 🚚 DELIVERY — DORI RO‘YXATI (OMBOR) */
+/* ================================================= */
+router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
+  try {
+    const medicines = await Medicine.find()
+      .select("name quantity minLevel")
+      .sort({ name: 1 })
+      .lean();
+
+    res.json(medicines);
+  } catch (error) {
+    console.error("FOR DELIVERY ERROR:", error);
+    res.status(500).json({
+      message: "Dorilarni olishda xatolik",
+    });
+  }
+});
 
 export default router;
