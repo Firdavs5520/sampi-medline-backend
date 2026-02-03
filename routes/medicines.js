@@ -8,7 +8,130 @@ import { addToTelegramBatch } from "../utils/telegramBatch.js";
 const router = express.Router();
 
 /* ================================================= */
-/* 🚚 DELIVERY — BULK (ATOMIC QILINDI) */
+/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR (KO‘RISH) */
+/* ================================================= */
+router.get(
+  "/",
+  auth,
+  allowRoles("nurse", "manager", "delivery"),
+  async (_req, res) => {
+    try {
+      const meds = await Medicine.find().sort({ updatedAt: -1 }).lean();
+      res.json(meds);
+    } catch {
+      res.status(500).json({ message: "Dorilarni olishda xatolik" });
+    }
+  },
+);
+
+/* ================================================= */
+/* 👩‍⚕️ NURSE — DORI QO‘SHISH */
+/* ================================================= */
+router.post("/", auth, allowRoles("nurse"), async (req, res) => {
+  try {
+    const { name, price, quantity, unit, minLevel } = req.body;
+
+    if (!name || price == null || quantity == null) {
+      return res.status(400).json({ message: "Maʼlumotlar yetarli emas" });
+    }
+
+    const medicine = await Medicine.create({
+      name: name.trim(),
+      price: Number(price),
+      quantity: Number(quantity),
+      unit: unit || "dona",
+      minLevel: Number(minLevel || 0),
+    });
+
+    res.status(201).json(medicine);
+  } catch (e) {
+    console.error("CREATE MEDICINE ERROR:", e);
+    res.status(500).json({ message: "Dori qo‘shilmadi" });
+  }
+});
+
+/* ================================================= */
+/* 👩‍⚕️ NURSE — DORI TAHRIRLASH */
+/* ================================================= */
+router.put("/:id", auth, allowRoles("nurse"), async (req, res) => {
+  try {
+    const { name, price, quantity, unit, minLevel } = req.body;
+
+    const updated = await Medicine.findByIdAndUpdate(
+      req.params.id,
+      {
+        ...(name && { name: name.trim() }),
+        ...(price != null && { price: Number(price) }),
+        ...(quantity != null && { quantity: Number(quantity) }),
+        ...(unit && { unit }),
+        ...(minLevel != null && { minLevel: Number(minLevel) }),
+      },
+      { new: true },
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Dori topilmadi" });
+    }
+
+    res.json(updated);
+  } catch (e) {
+    console.error("UPDATE MEDICINE ERROR:", e);
+    res.status(500).json({ message: "Dori tahrirlanmadi" });
+  }
+});
+
+/* ================================================= */
+/* 👩‍⚕️ NURSE — DORI O‘CHIRISH */
+/* ================================================= */
+router.delete("/:id", auth, allowRoles("nurse"), async (req, res) => {
+  try {
+    const deleted = await Medicine.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Dori topilmadi" });
+    }
+
+    res.json({ message: "Dori o‘chirildi" });
+  } catch (e) {
+    console.error("DELETE MEDICINE ERROR:", e);
+    res.status(500).json({ message: "Dori o‘chirilmadi" });
+  }
+});
+
+/* ================================================= */
+/* 👩‍⚕️ NURSE — DORI ISHLATISH (OMBORDAN AYIRISH) */
+/* ================================================= */
+router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
+  try {
+    const qty = Number(req.body.quantity);
+
+    if (!qty || qty <= 0) {
+      return res.status(400).json({ message: "Miqdor noto‘g‘ri" });
+    }
+
+    const updated = await Medicine.findOneAndUpdate(
+      { _id: req.params.id, quantity: { $gte: qty } },
+      { $inc: { quantity: -qty } },
+      { new: true },
+    );
+
+    if (!updated) {
+      return res.status(400).json({
+        message: "Dori yetarli emas yoki topilmadi",
+      });
+    }
+
+    res.json({
+      message: "Dori ishlatildi",
+      medicine: updated,
+    });
+  } catch {
+    res.status(500).json({ message: "Dori ishlatishda xatolik" });
+  }
+});
+
+/* ================================================= */
+/* 🚚 DELIVERY — OMBORGA KIRITISH (BULK) */
 /* ================================================= */
 router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
   const session = await mongoose.startSession();
@@ -56,8 +179,7 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
       });
 
       telegramMsgs.push(
-        `💊 <b>Medicine ID:</b> ${medicineId}\n` +
-          `➕ Qo‘shildi: <b>${qty}</b> dona`,
+        `💊 <b>Medicine ID:</b> ${medicineId}\n➕ Qo‘shildi: <b>${qty}</b> dona`,
       );
     }
 
@@ -73,7 +195,7 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
     telegramMsgs.forEach(addToTelegramBatch);
 
     res.json({
-      message: "Dorilar muvaffaqiyatli omborga qo‘shildi",
+      message: "Dorilar omborga qo‘shildi",
       modified: logs.length,
     });
   } catch (e) {
@@ -86,75 +208,20 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
 });
 
 /* ================================================= */
-/* 🚚 DELIVERY — DORI RO‘YXATI */
-/* ================================================= */
-router.get("/for-delivery", auth, allowRoles("delivery"), async (_req, res) => {
-  try {
-    const medicines = await Medicine.find()
-      .select("name quantity minLevel")
-      .sort({ name: 1 })
-      .lean();
-
-    res.json(medicines);
-  } catch {
-    res.status(500).json({ message: "Dorilarni olishda xatolik" });
-  }
-});
-
-/* ================================================= */
-/* 👩‍⚕️ NURSE — DORI ISHLATISH (YANADA XAVFSIZ) */
-/* ================================================= */
-router.post("/use/:id", auth, allowRoles("nurse"), async (req, res) => {
-  try {
-    const qty = Number(req.body.quantity);
-
-    if (!qty || qty <= 0) {
-      return res.status(400).json({ message: "Miqdor noto‘g‘ri" });
-    }
-
-    const updated = await Medicine.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        quantity: { $gte: qty },
-      },
-      { $inc: { quantity: -qty } },
-      { new: true },
-    );
-
-    if (!updated) {
-      return res
-        .status(400)
-        .json({ message: "Dori yetarli emas yoki topilmadi" });
-    }
-
-    res.json({
-      message: "Dori ishlatildi",
-      medicine: updated,
-    });
-  } catch {
-    res.status(500).json({ message: "Dori ishlatishda xatolik" });
-  }
-});
-
-/* ================================================= */
-/* 👩‍⚕️ + 👨‍💼 — BARCHA DORILAR (KO‘RISH) */
-/* ================================================= */
-router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
-  const meds = await Medicine.find().sort({ updatedAt: -1 }).lean();
-  res.json(meds);
-});
-
-/* ================================================= */
-/* 👨‍💼 MANAGER — KAM QOLGAN DORILAR */
+/* 👨‍💼 MANAGER — KAM QOLGAN DORILAR (ALERT) */
 /* ================================================= */
 router.get("/alerts", auth, allowRoles("manager"), async (_req, res) => {
-  const alerts = await Medicine.find({
-    $expr: { $lte: ["$quantity", "$minLevel"] },
-  })
-    .sort({ quantity: 1 })
-    .lean();
+  try {
+    const alerts = await Medicine.find({
+      $expr: { $lte: ["$quantity", "$minLevel"] },
+    })
+      .sort({ quantity: 1 })
+      .lean();
 
-  res.json(alerts);
+    res.json(alerts);
+  } catch {
+    res.status(500).json({ message: "Alertlarni olishda xatolik" });
+  }
 });
 
 export default router;

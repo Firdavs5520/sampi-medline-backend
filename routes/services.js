@@ -9,9 +9,8 @@ const router = express.Router();
 /* ================================================= */
 router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
   try {
-    // 🔧 faqat aktiv xizmatlar
     const services = await Service.find({ isActive: { $ne: false } })
-      .sort({ name: 1 })
+      .sort({ updatedAt: -1 })
       .lean();
 
     res.json(services);
@@ -21,50 +20,41 @@ router.get("/", auth, allowRoles("nurse", "manager"), async (_req, res) => {
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — CREATE SERVICE */
+/* 👩‍⚕️ NURSE — XIZMAT QO‘SHISH */
 /* ================================================= */
-router.post("/", auth, allowRoles("manager"), async (req, res) => {
+router.post("/", auth, allowRoles("nurse"), async (req, res) => {
   try {
-    const { name, variants } = req.body;
+    const { name, price } = req.body;
 
-    if (!name || !Array.isArray(variants) || !variants.length) {
-      return res.status(400).json({
-        message: "Xizmat nomi yoki variantlar noto‘g‘ri",
-      });
+    if (!name || price == null) {
+      return res.status(400).json({ message: "Maʼlumotlar yetarli emas" });
     }
 
     const service = await Service.create({
       name: name.trim(),
-      variants: variants.map((v) => ({
-        label: String(v.label).trim(),
-        price: Number(v.price),
-      })),
+      price: Number(price),
       isActive: true,
     });
 
     res.status(201).json(service);
   } catch (e) {
-    res.status(500).json({ message: "Xizmat qo‘shishda xatolik" });
+    console.error("CREATE SERVICE ERROR:", e);
+    res.status(500).json({ message: "Xizmat qo‘shilmadi" });
   }
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — UPDATE SERVICE */
+/* 👩‍⚕️ NURSE — XIZMAT TAHRIRLASH */
 /* ================================================= */
-router.put("/:id", auth, allowRoles("manager"), async (req, res) => {
+router.put("/:id", auth, allowRoles("nurse"), async (req, res) => {
   try {
-    const { name, variants } = req.body;
+    const { name, price } = req.body;
 
     const updated = await Service.findByIdAndUpdate(
       req.params.id,
       {
         ...(name && { name: name.trim() }),
-        ...(Array.isArray(variants) && {
-          variants: variants.map((v) => ({
-            label: String(v.label).trim(),
-            price: Number(v.price),
-          })),
-        }),
+        ...(price != null && { price: Number(price) }),
       },
       { new: true },
     );
@@ -75,14 +65,15 @@ router.put("/:id", auth, allowRoles("manager"), async (req, res) => {
 
     res.json(updated);
   } catch (e) {
-    res.status(500).json({ message: "Xizmatni yangilashda xatolik" });
+    console.error("UPDATE SERVICE ERROR:", e);
+    res.status(500).json({ message: "Xizmat tahrirlanmadi" });
   }
 });
 
 /* ================================================= */
-/* 👨‍💼 MANAGER — DELETE SERVICE (SOFT) */
+/* 👩‍⚕️ NURSE — XIZMAT O‘CHIRISH (SOFT DELETE) */
 /* ================================================= */
-router.delete("/:id", auth, allowRoles("manager"), async (req, res) => {
+router.delete("/:id", auth, allowRoles("nurse"), async (req, res) => {
   try {
     const updated = await Service.findByIdAndUpdate(
       req.params.id,
@@ -96,7 +87,8 @@ router.delete("/:id", auth, allowRoles("manager"), async (req, res) => {
 
     res.json({ success: true });
   } catch (e) {
-    res.status(500).json({ message: "Xizmatni o‘chirishda xatolik" });
+    console.error("DELETE SERVICE ERROR:", e);
+    res.status(500).json({ message: "Xizmat o‘chirilmadi" });
   }
 });
 
