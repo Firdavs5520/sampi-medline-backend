@@ -10,6 +10,7 @@ import serviceRoutes from "./routes/services.js";
 import administrationRoutes from "./routes/administrations.js";
 import reportRoutes from "./routes/reports.js";
 import deliveryLogRoutes from "./routes/deliveryLogs.js";
+import lorRoutes from "./routes/lor.js"; // ✅ YANGI (LOR)
 
 dotenv.config();
 
@@ -45,9 +46,10 @@ app.get("/", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/medicines", medicineRoutes);
 app.use("/api/services", serviceRoutes);
-app.use("/api/administrations", administrationRoutes); // ✅ bulk shu yerda
+app.use("/api/administrations", administrationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/delivery-logs", deliveryLogRoutes);
+app.use("/api/lor", lorRoutes); // ✅ LOR ROUTE ULANADI
 
 /* ===================== */
 /* 404 HANDLER */
@@ -71,7 +73,7 @@ const PORT = process.env.PORT || 10000;
 
 mongoose
   .connect(process.env.MONGO_URI, {
-    maxPoolSize: 10, // ⚡ parallel requestlar uchun
+    maxPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
   })
   .then(() => {
