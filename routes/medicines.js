@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import Medicine from "../models/Medicine.js";
 import DeliveryLog from "../models/DeliveryLog.js";
 import { auth, allowRoles } from "../middleware/auth.js";
-import { addToTelegramBatch } from "../utils/telegramBatch.js";
 
 const router = express.Router();
 
@@ -161,7 +160,6 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
     session.startTransaction();
 
     const logs = [];
-    const telegramMsgs = [];
 
     for (const { medicineId, quantity } of items) {
       const qty = Number(quantity);
@@ -184,10 +182,6 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
         quantity: qty,
         deliveredBy: req.user.id,
       });
-
-      telegramMsgs.push(
-        `💊 <b>Medicine ID:</b> ${medicineId}\n➕ Qo‘shildi: <b>${qty}</b> dona`,
-      );
     }
 
     if (!logs.length) {
@@ -198,8 +192,6 @@ router.post("/delivery", auth, allowRoles("delivery"), async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-
-    telegramMsgs.forEach(addToTelegramBatch);
 
     res.json({
       message: "Dorilar omborga qo‘shildi",
