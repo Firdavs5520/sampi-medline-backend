@@ -14,26 +14,26 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true, // ⚡ login tez (BITTA JOYDA)
+      index: true,
     },
 
     password: {
       type: String,
       required: true,
-      select: false, // 🔒 default holatda chiqmaydi
+      select: false,
     },
 
     role: {
       type: String,
-      enum: ["delivery", "manager", "nurse"],
+      enum: ["delivery", "manager", "nurse", "lor"], // 🔥 LOR QO‘SHILDI
       required: true,
-      index: true, // ⚡ role bo‘yicha filter tez
+      index: true,
     },
 
     isActive: {
       type: Boolean,
       default: true,
-      index: true, // ⚡ aktiv userlar tez
+      index: true,
     },
   },
   {
@@ -42,9 +42,6 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-/* ===================== */
-/* 🔥 COMPOUND INDEX */
-/* ===================== */
 // role + aktivlik bo‘yicha tez filter
 userSchema.index({ role: 1, isActive: 1 });
 
