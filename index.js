@@ -11,6 +11,7 @@ import administrationRoutes from "./routes/administrations.js";
 import reportRoutes from "./routes/reports.js";
 import deliveryLogRoutes from "./routes/deliveryLogs.js";
 import lorRoutes from "./routes/lor.js"; // ✅ YANGI (LOR)
+import userRoutes from "./routes/users.js";
 
 dotenv.config();
 
@@ -50,6 +51,7 @@ app.use("/api/administrations", administrationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/delivery-logs", deliveryLogRoutes);
 app.use("/api/lor", lorRoutes); // ✅ LOR ROUTE ULANADI
+app.use("/api/users", userRoutes);
 
 /* ===================== */
 /* 404 HANDLER */
