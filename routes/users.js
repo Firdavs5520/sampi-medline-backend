@@ -1,17 +1,17 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
-import { auth, allowRoles } from "../middleware/auth.js";
+import { authMiddleware, allowRoles } from "../middleware/auth.js";
 
 const router = express.Router();
 
-/* MANAGER — LOR CREATE */
-router.post("/lor", auth, allowRoles("manager"), async (req, res) => {
+/* MANAGER — LOR USER CREATE */
+router.post("/lor", authMiddleware, allowRoles("manager"), async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Ma'lumot to‘liq emas" });
+      return res.status(400).json({ message: "Ma'lumot yetarli emas" });
     }
 
     const exists = await User.findOne({ email });
@@ -26,20 +26,16 @@ router.post("/lor", auth, allowRoles("manager"), async (req, res) => {
       email,
       password: hashed,
       role: "lor",
+      isActive: true,
     });
 
     res.status(201).json({
       message: "LOR yaratildi",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      role: user.role,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Xatolik" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server xatoligi" });
   }
 });
 
