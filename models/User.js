@@ -1,51 +1,23 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true, // ⚡ login tez (BITTA JOYDA)
-    },
-
-    password: {
-      type: String,
-      required: true,
-      select: false, // 🔒 default holatda chiqmaydi
-    },
-
+    name: { type: String, required: true, trim: true, maxlength: 100 },
+    email: { type: String, required: true, unique: true, lowercase: true },
+    password: { type: String, required: true },
     role: {
       type: String,
-      enum: ["delivery", "manager", "nurse"],
+      enum: ["nurse", "lor", "manager", "delivery"],
       required: true,
-      index: true, // ⚡ role bo‘yicha filter tez
-    },
-
-    isActive: {
-      type: Boolean,
-      default: true,
-      index: true, // ⚡ aktiv userlar tez
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  },
+  { timestamps: true, versionKey: false },
 );
 
-/* ===================== */
-/* 🔥 COMPOUND INDEX */
-/* ===================== */
-// role + aktivlik bo‘yicha tez filter
-userSchema.index({ role: 1, isActive: 1 });
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
 
 export default mongoose.model("User", userSchema);

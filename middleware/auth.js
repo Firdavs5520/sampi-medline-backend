@@ -1,24 +1,31 @@
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
 /* ===================== */
 /* AUTH */
 /* ===================== */
-export function authMiddleware(req, res, next) {
+export async function auth(req, res, next) {
   const header = req.headers.authorization;
 
   if (!header || !header.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Token mavjud emas" });
   }
 
-  const token = header.slice(7); // "Bearer " dan keyin
+  const token = header.slice(7);
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // req.user ni himoyalaymiz (tasodifan overwrite bo‘lmasin)
+    // 🔥 USERNI DB DAN OLAMIZ
+    const user = await User.findById(decoded.id).lean();
+
+    if (!user) {
+      return res.status(401).json({ message: "User topilmadi" });
+    }
+
     req.user = Object.freeze({
-      id: decoded.id,
-      role: decoded.role,
+      id: user._id.toString(),
+      role: user.role,
     });
 
     next();
@@ -26,8 +33,6 @@ export function authMiddleware(req, res, next) {
     return res.status(401).json({ message: "Token yaroqsiz" });
   }
 }
-
-export const auth = authMiddleware;
 
 /* ===================== */
 /* ROLE */

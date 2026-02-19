@@ -5,9 +5,8 @@ const medicineSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
+      unique: true, // unique o‘zi index yaratadi
       trim: true,
-      index: true, // ⚡ qidiruv tez
     },
 
     price: {
@@ -19,41 +18,74 @@ const medicineSchema = new mongoose.Schema(
     quantity: {
       type: Number,
       default: 0,
-      min: 0, // ❗ manfiy ketmasin
-      index: true, // ⚡ stock filter tez
+      min: 0,
     },
 
     minLevel: {
       type: Number,
       default: 5,
       min: 0,
-      index: true, // ⚡ kam qolganlarni tez olish
     },
 
     lastDeliveredBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      index: true,
     },
 
     lastDeliveredAt: {
       type: Date,
-      index: true,
     },
   },
   {
     timestamps: true,
     versionKey: false,
-  },
+  }
 );
 
-/* ===================== */
-/* 🔥 COMPOUND INDEX */
-/* ===================== */
-// kam qolgan dorilarni tez topish
+/* ========================= */
+/* 🔥 PERFORMANCE INDEXLAR */
+/* ========================= */
+
+// Kam qolgan dorilarni tez topish
 medicineSchema.index({ quantity: 1, minLevel: 1 });
 
-// oxirgi yetkazilgan dorilar
+// Oxirgi yetkazilganlarni tez olish
 medicineSchema.index({ lastDeliveredAt: -1 });
+
+// Agar search kerak bo‘lsa (ixtiyoriy)
+medicineSchema.index({ name: "text" });
+
+/* ========================= */
+/* 🔥 STATIC METHODLAR */
+/* ========================= */
+
+// Dori qo‘shish (delivery)
+medicineSchema.statics.addStock = async function (
+  medicineId,
+  amount,
+  userId
+) {
+  return this.findByIdAndUpdate(
+    medicineId,
+    {
+      $inc: { quantity: amount },
+      lastDeliveredBy: userId,
+      lastDeliveredAt: new Date(),
+    },
+    { new: true }
+  );
+};
+
+// Dori ishlatish (nurse) — ATOMIC & SAFE
+medicineSchema.statics.useStock = async function (
+  medicineId,
+  amount
+) {
+  return this.findOneAndUpdate(
+    { _id: medicineId, quantity: { $gte: amount } },
+    { $inc: { quantity: -amount } },
+    { new: true }
+  );
+};
 
 export default mongoose.model("Medicine", medicineSchema);
