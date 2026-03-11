@@ -10,7 +10,7 @@ const router = express.Router();
 /* ================================================= */
 /* 👩‍⚕️ NURSE — BULK ORDER (ATOMIC, 1 BEMOR = 1 CHEK) */
 /* ================================================= */
-router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
+router.post("/bulk", auth, allowRoles("nurse", "lor"), async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -20,105 +20,70 @@ router.post("/bulk", auth, allowRoles("nurse"), async (req, res) => {
       return res.status(400).json({ message: "Noto‘g‘ri ma’lumot" });
     }
 
-    const nurseId = req.user.id;
+    const performedBy = {
+      user: req.user.id,
+      role: req.user.role,
+    };
 
-    /* 🔒 TRANSACTION */
     session.startTransaction();
 
-    /* ===================== */
-    /* 1️⃣ JAMI HISOB */
-    /* ===================== */
     let total = 0;
-    for (const i of items) {
-      total += Number(i.price) * Number(i.quantity || 1);
-    }
-
-    /* ===================== */
-    /* 2️⃣ ORDER (CHEK) */
-    /* ===================== */
-    const [order] = await AdministrationOrder.create(
-      [
-        {
-          patientName,
-          nurseId,
-          items: items.map((i) => ({
-            type: i.type,
-            name: i.name,
-            quantity: i.type === "medicine" ? Number(i.quantity || 1) : 1,
-            price: Number(i.price),
-            medicineId: i.type === "medicine" ? i._id : null,
-            serviceId: i.type === "service" ? i.serviceId : null,
-          })),
-          total,
-          date: new Date(),
-        },
-      ],
-      { session },
-    );
-
-    /* ===================== */
-    /* 3️⃣ LOG + OMBOR */
-    /* ===================== */
     const logs = [];
 
     for (const i of items) {
-      const qty = i.type === "medicine" ? Number(i.quantity || 1) : 1;
+      const price = Number(i.price);
+      const qty = Number(i.quantity || 1);
 
-      // LOG
-      logs.push({
-        patientName,
-        type: i.type,
-        name: i.name,
-        quantity: qty,
-        price: Number(i.price),
-        nurseId,
-        date: new Date(),
-      });
+      if (isNaN(price) || isNaN(qty)) {
+        throw new Error("Narx yoki miqdor noto‘g‘ri");
+      }
 
-      /* 🔥 OMBORNI TEMIR TEKSHIRUV */
-      if (i.type === "medicine" && i._id) {
+      total += price * qty;
+
+      // 🔒 LOR dori ishlata olmaydi
+      if (req.user.role === "lor" && i.type === "medicine") {
+        throw new Error("LOR dori ishlata olmaydi");
+      }
+
+      // 🔥 OMBOR TEKSHIRUV
+      if (i.type === "medicine") {
         const updated = await Medicine.findOneAndUpdate(
-          {
-            _id: i._id,
-            quantity: { $gte: qty }, // 🔒 0 dan past tushmaydi
-          },
-          {
-            $inc: { quantity: -qty },
-            $set: { updatedAt: new Date() },
-          },
-          {
-            session,
-            new: true,
-          },
+          { _id: i._id, quantity: { $gte: qty } },
+          { $inc: { quantity: -qty } },
+          { session, new: true },
         );
 
         if (!updated) {
           throw new Error(`Omborda yetarli emas: ${i.name}`);
         }
       }
+
+      logs.push({
+        patientName,
+        type: i.type,
+        name: i.name,
+        quantity: qty,
+        price,
+        performedBy,
+        date: new Date(),
+      });
     }
 
     await Administration.insertMany(logs, { session });
 
-    /* ===================== */
-    /* ✅ COMMIT */
-    /* ===================== */
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      orderId: order._id,
       total,
     });
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
 
-    console.error("ADMINISTRATION BULK ERROR:", error.message);
-
-    return res.status(400).json({
-      message: error.message || "Bulk order saqlashda xatolik",
+    res.status(400).json({
+      message: error.message || "Xatolik",
     });
   }
 });

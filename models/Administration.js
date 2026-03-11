@@ -1,30 +1,31 @@
 import mongoose from "mongoose";
 
-const AdministrationSchema = new mongoose.Schema(
+const administrationSchema = new mongoose.Schema(
   {
     patientName: {
       type: String,
       required: true,
       trim: true,
-      index: true, // ⚡ qidiruv tez
+      index: true,
     },
 
     type: {
       type: String,
       enum: ["medicine", "service"],
       required: true,
-      index: true, // ⚡ filter tez
+      index: true,
     },
 
     name: {
       type: String,
       required: true,
-      index: true, // ⚡ reportlar uchun
+      trim: true,
+      index: true,
     },
 
     quantity: {
       type: Number,
-      default: 1,
+      required: true,
       min: 1,
     },
 
@@ -34,33 +35,33 @@ const AdministrationSchema = new mongoose.Schema(
       min: 0,
     },
 
-    // 🔥 MUHIM: nurseId (nurse EMAS!)
-    nurseId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true, // ⚡ populate tez
+    performedBy: {
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true,
+      },
+      role: {
+        type: String,
+        enum: ["nurse", "lor"],
+        required: true,
+        index: true,
+      },
     },
 
     date: {
       type: Date,
       default: Date.now,
-      index: true, // ⚡ vaqt bo‘yicha sort
+      index: true,
     },
   },
   {
     timestamps: true,
-    versionKey: false, // 🔹 __v olib tashlandi (toza)
+    versionKey: false,
   },
 );
 
-/* ===================== */
-/* 🔥 COMPOUND INDEX */
-/* ===================== */
-// oxirgi yozuvlarni tez olish (logs, reports)
-AdministrationSchema.index({ createdAt: -1 });
+administrationSchema.index({ "performedBy.role": 1, date: -1 });
 
-// nurse + vaqt bo‘yicha filter
-AdministrationSchema.index({ nurseId: 1, createdAt: -1 });
-
-export default mongoose.model("Administration", AdministrationSchema);
+export default mongoose.model("Administration", administrationSchema);
