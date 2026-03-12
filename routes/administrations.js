@@ -40,12 +40,10 @@ router.post("/bulk", auth, allowRoles("nurse", "lor"), async (req, res) => {
 
       total += price * qty;
 
-      // 🔒 LOR dori ishlata olmaydi
       if (req.user.role === "lor" && i.type === "medicine") {
         throw new Error("LOR dori ishlata olmaydi");
       }
 
-      // 🔥 OMBOR TEKSHIRUV
       if (i.type === "medicine") {
         const updated = await Medicine.findOneAndUpdate(
           { _id: i._id, quantity: { $gte: qty } },
@@ -69,6 +67,28 @@ router.post("/bulk", auth, allowRoles("nurse", "lor"), async (req, res) => {
       });
     }
 
+    // 🔥 ORDER YARATISH
+    const order = await AdministrationOrder.create(
+      [
+        {
+          patientName,
+          nurseId: req.user.id,
+          items: items.map((i) => ({
+            type: i.type,
+            name: i.name,
+            quantity: Number(i.quantity || 1),
+            price: Number(i.price || 0),
+            medicineId: i.type === "medicine" ? i._id : undefined,
+            serviceId: i.type === "service" ? i.serviceId : undefined,
+          })),
+          total,
+          date: new Date(),
+        },
+      ],
+      { session },
+    );
+
+    // 🔥 LOGS
     await Administration.insertMany(logs, { session });
 
     await session.commitTransaction();
@@ -76,6 +96,7 @@ router.post("/bulk", auth, allowRoles("nurse", "lor"), async (req, res) => {
 
     res.status(201).json({
       success: true,
+      orderId: order[0]._id,
       total,
     });
   } catch (error) {
