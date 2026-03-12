@@ -50,15 +50,25 @@ router.get(
         { $match: { ...match, type: "service" } },
         {
           $group: {
-            _id: "$name",
+            _id: {
+              name: "$name",
+              role: "$performedBy.role",
+            },
             count: { $sum: "$quantity" },
             revenue: {
               $sum: { $multiply: ["$price", "$quantity"] },
             },
           },
         },
-        { $sort: { count: -1 } },
-        { $limit: 5 },
+        {
+          $project: {
+            name: "$_id.name",
+            role: "$_id.role",
+            count: 1,
+            revenue: 1,
+          },
+        },
+        { $sort: { revenue: -1 } },
       ]);
 
       /* ===================== */
