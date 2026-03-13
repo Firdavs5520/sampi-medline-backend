@@ -4,9 +4,6 @@ import { auth, allowRoles } from "../middleware/auth.js";
 
 const router = express.Router();
 
-/* ================================================= */
-/* 👨‍💼 MANAGER DASHBOARD (FULL ANALYTICS) */
-/* ================================================= */
 router.get(
   "/manager-dashboard",
   auth,
@@ -19,17 +16,18 @@ router.get(
 
       if (from && to) {
         const fromDate = new Date(from);
-        fromDate.setHours(0, 0, 0, 0);
-
         const toDate = new Date(to);
-        toDate.setHours(23, 59, 59, 999);
 
-        match.date = { $gte: fromDate, $lte: toDate };
+        match.date = {
+          $gte: fromDate,
+          $lte: toDate,
+        };
       }
 
       /* ===================== */
-      /* 🔹 Nurse vs LOR SUMMARY */
+      /* ROLE SUMMARY */
       /* ===================== */
+
       const byRole = await Administration.aggregate([
         { $match: match },
         {
@@ -44,8 +42,9 @@ router.get(
       ]);
 
       /* ===================== */
-      /* 🔹 TOP SERVICES */
+      /* SERVICES */
       /* ===================== */
+
       const topServices = await Administration.aggregate([
         { $match: { ...match, type: "service" } },
         {
@@ -66,14 +65,46 @@ router.get(
             role: "$_id.role",
             count: 1,
             revenue: 1,
+            type: { $literal: "service" },
           },
         },
         { $sort: { revenue: -1 } },
       ]);
 
       /* ===================== */
-      /* 🔹 TOP EMPLOYEES */
+      /* MEDICINES */
       /* ===================== */
+
+      const topMedicines = await Administration.aggregate([
+        { $match: { ...match, type: "medicine" } },
+        {
+          $group: {
+            _id: {
+              name: "$name",
+              role: "$performedBy.role",
+            },
+            count: { $sum: "$quantity" },
+            revenue: {
+              $sum: { $multiply: ["$price", "$quantity"] },
+            },
+          },
+        },
+        {
+          $project: {
+            name: "$_id.name",
+            role: "$_id.role",
+            count: 1,
+            revenue: 1,
+            type: { $literal: "medicine" },
+          },
+        },
+        { $sort: { revenue: -1 } },
+      ]);
+
+      /* ===================== */
+      /* TOP EMPLOYEES */
+      /* ===================== */
+
       const topEmployees = await Administration.aggregate([
         { $match: match },
         {
@@ -99,7 +130,6 @@ router.get(
         { $unwind: "$user" },
         {
           $project: {
-            _id: 0,
             userId: "$user._id",
             name: "$user.name",
             role: 1,
@@ -110,8 +140,9 @@ router.get(
       ]);
 
       /* ===================== */
-      /* 🔹 GLOBAL TOTAL */
+      /* GLOBAL TOTAL */
       /* ===================== */
+
       const global = await Administration.aggregate([
         { $match: match },
         {
@@ -128,6 +159,7 @@ router.get(
       res.json({
         summaryByRole: byRole,
         topServices,
+        topMedicines,
         topEmployees,
         global: global[0] || {
           totalRevenue: 0,
